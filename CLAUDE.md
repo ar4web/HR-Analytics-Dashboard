@@ -160,6 +160,14 @@ keep that ordering if you add floating UI.
   data arrays in components or in `App.tsx`, and do not add a hand-typed constant — the whole point
   of the data layer is that a figure cannot disagree with the population behind it. New panels
   should import from `metrics.ts` rather than the `hrData.ts` adapter.
+- **Adding a module:** four edits — a `NavItem` in `components/Sidebar.tsx`, a key in the
+  `activeModule` switch in `App.tsx`, a panel component, and a data facade if the figures are
+  regulatory (`data/compliance.ts` is the pattern). The sidebar is controlled: `App` owns
+  `activeModule` so the main region always agrees with the highlighted nav item. Nav badges must
+  come from `badges` (live counts), never a literal in the nav array.
+- **Saudi content:** the reference layer is `src/data/saudi.ts` — put rates, articles, thresholds and
+  calendars there, not in components. Anything regulatory states its basis in the UI (article number
+  or percentage), because these change by ministerial decision.
 - **Adding a chart:** either reuse an existing component in `src/components/` with a new
   `{ label, value, color }[]` mapping in `App.tsx`, or add a new presentational component there
   with a local `interface XxxProps`, a named export, and pure inline SVG/divs. Recharts is
