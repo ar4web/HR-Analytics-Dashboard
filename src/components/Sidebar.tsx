@@ -91,6 +91,10 @@ export function Sidebar({ collapsed, onToggleCollapsed, mobileOpen, onCloseMobil
         }}
         onMouseLeave={() => setHovered(null)}
         className={`group relative flex h-12 w-full items-center rounded-xl pl-4 pr-2 text-left transition-colors duration-200 ${
+          // pl-7 only when the rail is collapsed: (96 - 40) / 2 = 28px, which also
+          // lines the icons up with the 40px brand mark above them.
+          collapsed ? 'lg:pl-7' : ''
+        } ${
           isActive
             ? 'bg-emerald-50 text-emerald-700'
             : 'text-gray-500 hover:bg-gray-100/70 hover:text-gray-900'
