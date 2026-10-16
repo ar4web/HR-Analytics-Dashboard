@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
-  Users, UserCheck, UserPlus, TrendingUp, TrendingDown, DollarSign,
+  Users, UserCheck, UserPlus, TrendingUp, TrendingDown, Banknote,
   Calendar, Clock, Building2, Download, Bell,
   Search, ChevronDown, ChevronRight, BarChart3, PieChart, Activity,
   MapPin, Briefcase, Award, AlertCircle, Menu, Sparkles, Moon
@@ -16,6 +16,7 @@ import { FilterBar } from './components/FilterBar';
 import { Sidebar } from './components/Sidebar';
 import { ThemeMenu } from './components/ThemeMenu';
 import { CompliancePanel } from './components/CompliancePanel';
+import { CardHeader, Legend, MiniStat } from './components/ui';
 import {
   kpiData, departmentBreakdown, hiringTrends, attritionData,
   demographicsData, attendanceData, performanceData, locationData,
@@ -50,13 +51,13 @@ const METRIC_ICONS: Record<string, React.ReactNode> = {
   turnover: <TrendingDown className="w-5 h-5" />,
   timeToFill: <Clock className="w-5 h-5" />,
   offerAcceptance: <UserCheck className="w-5 h-5" />,
-  compaRatio: <DollarSign className="w-5 h-5" />,
+  compaRatio: <Banknote className="w-5 h-5" />,
   eNPS: <Sparkles className="w-5 h-5" />,
   totalEmployees: <Users className="w-5 h-5" />,
   activeEmployees: <UserCheck className="w-5 h-5" />,
   newHires: <UserPlus className="w-5 h-5" />,
   attritionVoluntary: <AlertCircle className="w-5 h-5" />,
-  avgSalary: <DollarSign className="w-5 h-5" />,
+  avgSalary: <Banknote className="w-5 h-5" />,
   attendanceRate: <Calendar className="w-5 h-5" />,
   leaveBalance: <Clock className="w-5 h-5" />,
   firstYearAttrition: <Activity className="w-5 h-5" />,
@@ -284,7 +285,7 @@ export default function App() {
   }));
 
   const locationChartData = locationData.map(d => ({
-    label: d.city.split(' ')[0],
+    label: d.city,
     value: d.employees,
     color: d.growth > 10 ? '#10b981' : d.growth > 0 ? '#6366f1' : '#f43f5e',
   }));
@@ -623,8 +624,12 @@ export default function App() {
             className="surface pad-panel"
           >
             <CardHeader
-              title="Office Locations"
-              subtitle="Employees by location"
+              title="Sites by City"
+              titleAr="المواقع والمدن"
+              subtitle="Headcount at each site"
+              // The Arabic names are the legal site names on a Saudi contract,
+              // so they belong on the panel rather than only in the tooltip.
+              subtitleAr={locationData.map((d) => d.cityAr).join(' · ')}
               tone="indigo"
               icon={<MapPin className="w-4.5 h-4.5" />}
             />
@@ -704,7 +709,9 @@ export default function App() {
                         </div>
                       </td>
                       <td className="tnum px-4 cell-y text-end text-sm font-bold text-strong">{dept.count}</td>
-                      <td className="tnum px-4 cell-y text-end text-sm text-body">${dept.avgSalary.toLocaleString()}</td>
+                      <td className="tnum px-4 cell-y text-end text-sm text-body">
+                        SAR {dept.avgSalary.toLocaleString()}
+                      </td>
                       <td className="px-4 cell-y text-end">
                         <span className={`chip tnum ${
                           dept.growth > 0 ? 'chip-positive' : dept.growth < 0 ? 'chip-negative' : 'chip-neutral'
@@ -885,72 +892,6 @@ export default function App() {
           </div>
         </div>
       </footer>
-    </div>
-  );
-}
-
-/* ---------------------------------------------------------------------------
-   Small presentational helpers shared by the cards above. Kept local because
-   they only shape this page's chrome, not the data components.
-   --------------------------------------------------------------------------- */
-
-function CardHeader({
-  title,
-  subtitle,
-  icon,
-  tone = 'emerald',
-  children,
-}: {
-  title: string;
-  subtitle?: string;
-  icon?: React.ReactNode;
-  tone?: Tone;
-  children?: React.ReactNode;
-}) {
-  return (
-    <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
-      <div className="flex items-start gap-3">
-        {icon && (
-          <span className={`tile tone-${tone} grid h-9 w-9 shrink-0 place-items-center rounded-xl`}>
-            {icon}
-          </span>
-        )}
-        <div>
-          <h3 className="text-[15px] font-semibold tracking-[-0.01em] text-strong">{title}</h3>
-          {subtitle && <p className="mt-0.5 text-xs text-muted">{subtitle}</p>}
-        </div>
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function Legend({ items }: { items: { label: string; color: string }[] }) {
-  return (
-    <div className="flex items-center gap-3">
-      {items.map((item) => (
-        <span key={item.label} className="inline-flex items-center gap-1.5">
-          <span
-            className="h-2.5 w-2.5 rounded-full ring-2 ring-surface"
-            style={{ backgroundColor: item.color, boxShadow: `0 1px 4px -1px ${item.color}aa` }}
-          />
-          <span className="text-[11px] font-medium text-body">{item.label}</span>
-        </span>
-      ))}
-    </div>
-  );
-}
-
-function MiniStat({ label, value, tone }: { label: string; value: string | number; tone: Tone }) {
-  return (
-    <div className={`tone-${tone} flex items-center gap-3 rounded-xl border border-hair bg-gradient-to-br from-surface to-surface-2 px-3.5 py-2.5 shadow-soft`}>
-      <span className="tile grid h-7 w-7 shrink-0 place-items-center rounded-lg">
-        <span className="h-1.5 w-1.5 rounded-full bg-surface" />
-      </span>
-      <div className="min-w-0">
-        <p className="truncate text-[11px] font-medium uppercase tracking-wide text-muted">{label}</p>
-        <p className="tnum truncate text-sm font-bold text-strong">{value}</p>
-      </div>
     </div>
   );
 }
