@@ -50,11 +50,11 @@ export function LineChart({ data, title, height = 200, showGrid = true }: LineCh
 
   return (
     <div className="w-full">
-      {title && <h4 className="mb-4 text-sm font-semibold text-gray-700">{title}</h4>}
+      {title && <h4 className="mb-4 text-sm font-semibold text-body">{title}</h4>}
       <div className="flex gap-3" style={{ height }}>
         {/* Value axis */}
         <div
-          className="tnum flex w-9 shrink-0 flex-col justify-between text-right text-[10px] font-medium text-gray-400"
+          className="tnum flex w-9 shrink-0 flex-col justify-between text-end text-[10px] font-medium text-subtle"
           style={{ paddingBottom: LABEL_BAND }}
         >
           {ticks.map((tick, i) => (
@@ -137,7 +137,7 @@ export function LineChart({ data, title, height = 200, showGrid = true }: LineCh
                 return pointsFor(key).map((p, i) => (
                   <motion.span
                     key={`${key}-${i}`}
-                    className="absolute h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ring-white"
+                    className="absolute h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ring-surface"
                     style={{ left: `${p.x}%`, top: `${p.y}%`, backgroundColor: color, boxShadow: `0 2px 6px -1px ${color}80` }}
                     initial={{ scale: 0, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
@@ -151,7 +151,7 @@ export function LineChart({ data, title, height = 200, showGrid = true }: LineCh
           {/* Category axis */}
           <div className="absolute inset-x-0 bottom-0 flex justify-between gap-1" style={{ height: LABEL_BAND }}>
             {data.map((d, i) => (
-              <span key={i} className="flex-1 truncate text-center text-[10px] font-medium text-gray-400">
+              <span key={i} className="flex-1 truncate text-center text-[10px] font-medium text-subtle">
                 {d.label}
               </span>
             ))}

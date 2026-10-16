@@ -52,7 +52,7 @@ export function DonutChart({
 
   return (
     <div className="flex flex-col items-center">
-      {title && <h4 className="mb-4 text-sm font-semibold text-gray-700">{title}</h4>}
+      {title && <h4 className="mb-4 text-sm font-semibold text-body">{title}</h4>}
 
       <div className="relative" style={{ width: size, height: size }}>
         <svg width={size} height={size} role="img" aria-label={`${centerText ?? 'Total'}: ${centerValue ?? total}`}>
@@ -97,10 +97,10 @@ export function DonutChart({
         </svg>
 
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-          <span className="tnum text-2xl font-bold leading-none text-gray-900">
+          <span className="tnum text-2xl font-bold leading-none text-strong">
             {active ? active.value.toLocaleString() : centerValue}
           </span>
-          <span className="mt-1 max-w-[75%] truncate text-[11px] font-medium text-gray-500">
+          <span className="mt-1 max-w-[75%] truncate text-[11px] font-medium text-muted">
             {active ? active.name : centerText}
           </span>
           {active && (
@@ -119,17 +119,17 @@ export function DonutChart({
               type="button"
               onMouseEnter={() => setActiveIndex(index)}
               onMouseLeave={() => setActiveIndex(null)}
-              className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors ${
-                activeIndex === index ? 'bg-gray-50' : ''
+              className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-start transition-colors ${
+                activeIndex === index ? 'bg-sunken' : ''
               }`}
             >
               <span
-                className="h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-white"
+                className="h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-surface"
                 style={{ backgroundColor: item.color, boxShadow: `0 1px 4px -1px ${item.color}aa` }}
               />
-              <span className="flex-1 truncate text-xs text-gray-600">{item.name}</span>
-              <span className="tnum text-xs font-semibold text-gray-900">{item.value.toLocaleString()}</span>
-              <span className="tnum w-11 text-right text-[11px] font-medium text-gray-400">
+              <span className="flex-1 truncate text-xs text-body">{item.name}</span>
+              <span className="tnum text-xs font-semibold text-strong">{item.value.toLocaleString()}</span>
+              <span className="tnum w-11 text-end text-[11px] font-medium text-subtle">
                 {(item.fraction * 100).toFixed(1)}%
               </span>
             </button>

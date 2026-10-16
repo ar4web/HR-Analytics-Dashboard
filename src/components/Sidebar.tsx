@@ -68,7 +68,7 @@ export function Sidebar({ collapsed, onToggleCollapsed, mobileOpen, onCloseMobil
 
   // Labels collapse to zero width at lg only — on mobile the drawer always shows them.
   const collapseClasses = collapsed ? 'lg:max-w-0 lg:opacity-0' : '';
-  const labelClass = `ml-3 max-w-[132px] overflow-hidden whitespace-nowrap opacity-100 transition-all duration-300 ${collapsed ? 'lg:ml-0 lg:max-w-0 lg:opacity-0' : ''}`;
+  const labelClass = `ms-3 max-w-[132px] overflow-hidden whitespace-nowrap opacity-100 transition-all duration-300 ${collapsed ? 'lg:ms-0 lg:max-w-0 lg:opacity-0' : ''}`;
   const blockClass = `max-w-[132px] overflow-hidden whitespace-nowrap opacity-100 transition-all duration-300 ${collapseClasses}`;
 
   const renderItem = (item: NavItem) => {
@@ -90,24 +90,24 @@ export function Sidebar({ collapsed, onToggleCollapsed, mobileOpen, onCloseMobil
           setHovered({ label: item.label, top: rect.top + rect.height / 2, badge: item.badge });
         }}
         onMouseLeave={() => setHovered(null)}
-        className={`group relative flex h-12 w-full items-center rounded-xl pl-4 pr-2 text-left transition-colors duration-200 ${
-          // pl-7 only when the rail is collapsed: (96 - 40) / 2 = 28px, which also
+        className={`group relative flex h-12 w-full items-center rounded-xl ps-4 pe-2 text-start transition-colors duration-200 ${
+          // ps-7 only when the rail is collapsed: (96 - 40) / 2 = 28px, which also
           // lines the icons up with the 40px brand mark above them.
-          collapsed ? 'lg:pl-7' : ''
+          collapsed ? 'lg:ps-7' : ''
         } ${
           isActive
             ? 'bg-gradient-to-r from-emerald-50 to-emerald-50/40 text-emerald-700 shadow-[inset_0_1px_0_0_rgb(255_255_255/0.6)] ring-1 ring-emerald-100'
-            : 'text-gray-500 hover:bg-gray-100/70 hover:text-gray-900'
+            : 'text-muted hover:bg-sunken-strong/70 hover:text-strong'
         }`}
       >
         {isActive && (
-          <span className="absolute left-0 top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-r-full bg-emerald-500" />
+          <span className="absolute start-0 top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-e-full bg-emerald-500" />
         )}
 
         <span className="relative grid h-10 w-10 shrink-0 place-items-center">
           <Icon className="h-5 w-5" strokeWidth={isActive ? 2.4 : 2} />
           {collapsed && item.badge ? (
-            <span className="absolute right-0.5 top-0.5 hidden h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-white lg:block" />
+            <span className="absolute end-0.5 top-0.5 hidden h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-surface lg:block" />
           ) : null}
         </span>
 
@@ -115,9 +115,9 @@ export function Sidebar({ collapsed, onToggleCollapsed, mobileOpen, onCloseMobil
 
         {item.badge ? (
           <span
-            className={`ml-auto rounded-full px-2 py-0.5 text-[11px] font-semibold transition-all duration-300 ${
+            className={`ms-auto rounded-full px-2 py-0.5 text-[11px] font-semibold transition-all duration-300 ${
               collapsed ? 'lg:max-w-0 lg:overflow-hidden lg:px-0 lg:opacity-0' : ''
-            } ${isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}
+            } ${isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-sunken text-body'}`}
           >
             {item.badge}
           </span>
@@ -129,25 +129,25 @@ export function Sidebar({ collapsed, onToggleCollapsed, mobileOpen, onCloseMobil
   return (
     <aside
       aria-label="Main navigation"
-      className={`glass-rail fixed left-0 top-0 z-[70] flex h-dvh w-[288px] flex-col border-r border-gray-200/70 shadow-2xl transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] lg:translate-x-0 lg:shadow-rail ${
+      className={`glass-rail fixed start-0 top-0 z-[70] flex h-dvh w-[288px] flex-col border-e border-hair-strong/70 shadow-2xl transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] lg:translate-x-0 lg:shadow-rail ${
         collapsed ? 'lg:w-24' : 'lg:w-[264px]'
-      } ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}
+      } ${mobileOpen ? 'translate-x-0' : '-translate-x-full rtl:translate-x-full'}`}
     >
       {/* Brand */}
-      <div className="relative flex h-16 shrink-0 items-center gap-3 overflow-hidden border-b border-gray-100 pl-7 pr-3">
+      <div className="relative flex h-16 shrink-0 items-center gap-3 overflow-hidden border-b border-hair ps-7 pe-3">
         <span className="pointer-events-none absolute inset-0 bg-gradient-to-r from-emerald-50/80 via-transparent to-transparent" aria-hidden />
         <div className="relative grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 shadow-lg shadow-emerald-500/25 ring-1 ring-emerald-600/20">
           <BarChart3 className="h-5 w-5 text-white" />
         </div>
         <div className={blockClass}>
-          <p className="text-sm font-bold leading-tight text-gray-900">HR Analytics</p>
-          <p className="text-[11px] text-gray-500">Workforce Suite</p>
+          <p className="text-sm font-bold leading-tight text-strong">HR Analytics</p>
+          <p className="text-[11px] text-muted">Workforce Suite</p>
         </div>
         <button
           type="button"
           onClick={onCloseMobile}
           aria-label="Close navigation"
-          className="ml-auto grid h-8 w-8 shrink-0 place-items-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 lg:hidden"
+          className="ms-auto grid h-8 w-8 shrink-0 place-items-center rounded-lg text-subtle transition-colors hover:bg-sunken hover:text-body lg:hidden"
         >
           <X className="h-4 w-4" />
         </button>
@@ -159,7 +159,7 @@ export function Sidebar({ collapsed, onToggleCollapsed, mobileOpen, onCloseMobil
         onClick={onToggleCollapsed}
         aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         aria-expanded={!collapsed}
-        className="absolute -right-3 top-[76px] z-20 hidden h-6 w-6 place-items-center rounded-full border border-gray-200 bg-white text-gray-400 shadow-md transition-colors hover:border-emerald-300 hover:text-emerald-600 lg:grid"
+        className="absolute -end-3 top-[76px] z-20 hidden h-6 w-6 place-items-center rounded-full border border-hair-strong bg-surface text-subtle shadow-md transition-colors hover:border-emerald-300 hover:text-emerald-600 lg:grid"
       >
         {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
       </button>
@@ -172,7 +172,7 @@ export function Sidebar({ collapsed, onToggleCollapsed, mobileOpen, onCloseMobil
         {navSections.map((section) => (
           <div key={section.title}>
             <p
-              className={`mb-1 h-5 pl-4 text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-400 ${blockClass}`}
+              className={`mb-1 h-5 ps-4 text-[11px] font-semibold uppercase tracking-[0.12em] text-subtle ${blockClass}`}
             >
               {section.title}
             </p>
@@ -182,21 +182,21 @@ export function Sidebar({ collapsed, onToggleCollapsed, mobileOpen, onCloseMobil
       </nav>
 
       {/* Footer: secondary nav + account */}
-      <div className="shrink-0 space-y-1 border-t border-gray-100 px-3 py-3">
+      <div className="shrink-0 space-y-1 border-t border-hair px-3 py-3">
         {bottomItems.map(renderItem)}
 
         <div className={`mt-2 flex items-center rounded-xl ${collapsed ? 'lg:justify-center' : ''}`}>
           <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-emerald-400 to-emerald-600 text-xs font-bold text-white">
             JD
           </div>
-          <div className={`${blockClass} ml-3`}>
-            <p className="text-sm font-semibold leading-tight text-gray-900">John Doe</p>
-            <p className="text-[11px] text-gray-500">HR Admin</p>
+          <div className={`${blockClass} ms-3`}>
+            <p className="text-sm font-semibold leading-tight text-strong">John Doe</p>
+            <p className="text-[11px] text-muted">HR Admin</p>
           </div>
           <button
             type="button"
             aria-label="Sign out"
-            className={`ml-auto grid h-8 w-8 shrink-0 place-items-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 ${
+            className={`ms-auto grid h-8 w-8 shrink-0 place-items-center rounded-lg text-subtle transition-colors hover:bg-sunken hover:text-body ${
               collapsed ? 'lg:hidden' : ''
             }`}
           >
@@ -209,14 +209,14 @@ export function Sidebar({ collapsed, onToggleCollapsed, mobileOpen, onCloseMobil
       {collapsed && (
         <div
           aria-hidden
-          className={`pointer-events-none absolute -translate-y-1/2 z-30 hidden items-center whitespace-nowrap rounded-lg bg-gray-900 px-2.5 py-1.5 text-xs font-medium text-white shadow-xl transition-all duration-150 lg:flex ${
-            hovered ? 'translate-x-0 opacity-100' : '-translate-x-2 opacity-0'
+          className={`pointer-events-none absolute -translate-y-1/2 z-30 hidden items-center whitespace-nowrap rounded-lg bg-inverse px-2.5 py-1.5 text-xs font-medium text-inverse-fg shadow-xl transition-all duration-150 lg:flex ${
+            hovered ? 'translate-x-0 opacity-100' : '-translate-x-2 rtl:translate-x-2 opacity-0'
           }`}
-          style={{ top: hovered ? hovered.top : 0, left: 106 }}
+          style={{ top: hovered ? hovered.top : 0, insetInlineStart: 106 }}
         >
           {hovered?.label}
           {hovered?.badge ? (
-            <span className="ml-2 rounded-full bg-white/20 px-1.5 py-0.5 text-[10px] font-semibold">
+            <span className="ms-2 rounded-full bg-white/20 px-1.5 py-0.5 text-[10px] font-semibold">
               {hovered.badge}
             </span>
           ) : null}

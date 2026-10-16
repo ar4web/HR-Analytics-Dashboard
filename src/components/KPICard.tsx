@@ -39,20 +39,20 @@ export function KPICard({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.45, delay: index * 0.05, ease: [0.22, 1, 0.36, 1] }}
-      className={`surface surface-lift hairline tone-${tone} group overflow-hidden p-5`}
+      className={`surface surface-lift hairline tone-${tone} group overflow-hidden pad-tile`}
     >
       {/* The icon is placed out of flow: at lg:grid-cols-8 a card is only ~180px
           wide, so an inline icon tile would squeeze the value into ~55px. */}
-      <div className="tile absolute right-5 top-5 grid h-9 w-9 place-items-center rounded-xl transition-transform duration-300 group-hover:scale-105">
+      <div className="tile absolute end-5 top-5 grid h-9 w-9 place-items-center rounded-xl transition-transform duration-300 group-hover:scale-105">
         {icon}
       </div>
 
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="truncate pr-11 text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-500">
+          <p className="truncate pe-11 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
             {title}
           </p>
-          <p className="tnum mt-2 text-[20px] font-bold leading-none tracking-tight text-gray-900 sm:text-[24px] xl:text-[26px]">
+          <p className="tnum mt-2 text-[20px] font-bold leading-none tracking-tight text-strong sm:text-[24px] xl:text-[26px]">
             {prefix}
             {typeof value === 'number' ? value.toLocaleString() : value}
             {suffix}
@@ -60,12 +60,8 @@ export function KPICard({
           {change !== undefined && (
             <div className="mt-3 flex flex-wrap items-center gap-x-1.5 gap-y-1">
               <span
-                className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${
-                  isPositive
-                    ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100'
-                    : isNegative
-                      ? 'bg-rose-50 text-rose-700 ring-1 ring-rose-100'
-                      : 'bg-gray-100 text-gray-600 ring-1 ring-gray-200'
+                className={`chip ${
+                  isPositive ? 'chip-positive' : isNegative ? 'chip-negative' : 'chip-neutral'
                 }`}
               >
                 {isPositive && <TrendingUp className="h-3 w-3" />}
@@ -75,7 +71,7 @@ export function KPICard({
                 {change}%
               </span>
               {changeLabel && (
-                <span className="truncate text-[11px] text-gray-400">{changeLabel}</span>
+                <span className="truncate text-[11px] text-subtle">{changeLabel}</span>
               )}
             </div>
           )}

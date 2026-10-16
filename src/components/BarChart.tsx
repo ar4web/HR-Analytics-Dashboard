@@ -23,7 +23,7 @@ export function BarChart({ data, title, height = 200, showValues = true, horizon
   if (horizontal) {
     return (
       <div className="w-full">
-        {title && <h4 className="mb-4 text-sm font-semibold text-gray-700">{title}</h4>}
+        {title && <h4 className="mb-4 text-sm font-semibold text-body">{title}</h4>}
         <div className="space-y-3">
           {data.map((item, index) => {
             const share = (item.value / total) * 100;
@@ -35,13 +35,13 @@ export function BarChart({ data, title, height = 200, showValues = true, horizon
                 transition={{ delay: index * 0.05, duration: 0.4 }}
                 className="group flex items-center gap-3"
               >
-                <span className="w-20 truncate text-xs font-medium text-gray-600">{item.label}</span>
-                <div className="relative h-6 flex-1 overflow-hidden rounded-full bg-gray-100 ring-1 ring-inset ring-gray-200/70">
+                <span className="w-20 truncate text-xs font-medium text-body">{item.label}</span>
+                <div className="relative h-6 flex-1 overflow-hidden rounded-full bg-sunken ring-1 ring-inset ring-hair-strong/70">
                   <motion.div
                     initial={{ width: 0 }}
                     animate={{ width: `${(item.value / maxValue) * 100}%` }}
                     transition={{ duration: 0.8, delay: index * 0.05, ease: [0.22, 1, 0.36, 1] }}
-                    className="flex h-full items-center justify-end rounded-full pr-2 shadow-[inset_0_1px_0_0_rgb(255_255_255/0.35)]"
+                    className="flex h-full items-center justify-end rounded-full pe-2 shadow-[inset_0_1px_0_0_rgb(255_255_255/0.35)]"
                     style={{
                       backgroundImage: `linear-gradient(90deg, ${colorOf(item)}cc, ${colorOf(item)})`,
                     }}
@@ -52,7 +52,7 @@ export function BarChart({ data, title, height = 200, showValues = true, horizon
                   </motion.div>
                 </div>
                 {showValues && (
-                  <span className="tnum w-16 shrink-0 text-right text-[11px] font-medium text-gray-500">
+                  <span className="tnum w-16 shrink-0 text-end text-[11px] font-medium text-muted">
                     {item.value / maxValue <= 0.18 ? item.value : `${share.toFixed(1)}%`}
                   </span>
                 )}
@@ -66,7 +66,7 @@ export function BarChart({ data, title, height = 200, showValues = true, horizon
 
   return (
     <div className="w-full">
-      {title && <h4 className="mb-4 text-sm font-semibold text-gray-700">{title}</h4>}
+      {title && <h4 className="mb-4 text-sm font-semibold text-body">{title}</h4>}
       <div className="flex items-end justify-between gap-2" style={{ height }}>
         {data.map((item, index) => (
           <motion.div
@@ -76,7 +76,7 @@ export function BarChart({ data, title, height = 200, showValues = true, horizon
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.05, duration: 0.4 }}
           >
-            <div className="relative flex w-full flex-col justify-end overflow-hidden rounded-t-lg bg-gray-100/80 ring-1 ring-inset ring-gray-200/60" style={{ height: height - 30 }}>
+            <div className="relative flex w-full flex-col justify-end overflow-hidden rounded-t-lg bg-sunken/80 ring-1 ring-inset ring-hair-strong/60" style={{ height: height - 30 }}>
               <div
                 className="absolute inset-x-0 opacity-0 transition-opacity duration-200 group-hover:opacity-100"
                 style={{ bottom: `${(item.value / maxValue) * 100}%`, height: 2, backgroundColor: colorOf(item) }}
@@ -95,7 +95,7 @@ export function BarChart({ data, title, height = 200, showValues = true, horizon
                 )}
               </motion.div>
             </div>
-            <span className="w-full truncate text-center text-[10px] font-medium text-gray-400">{item.label}</span>
+            <span className="w-full truncate text-center text-[10px] font-medium text-subtle">{item.label}</span>
           </motion.div>
         ))}
       </div>

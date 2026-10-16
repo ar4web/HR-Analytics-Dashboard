@@ -1,14 +1,47 @@
 /* Font first: every @import must precede other rules, and Tailwind's own import
-   expands into rules — reversing these two produced a PostCSS build warning. */
+   expands into rules — reversing these two produces a PostCSS build warning. */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 @import "tailwindcss";
 
-/* ---------------------------------------------------------------------------
-   Design tokens. Tailwind v4 is CSS-first, so anything in @theme is available
-   as a utility (--shadow-card -> shadow-card, --color-brand-500 -> bg-brand-500).
-   --------------------------------------------------------------------------- */
+/* Theme is driven by data-theme on <html>, not by prefers-color-scheme, so the
+   user's explicit choice wins. `dark:` variants are available for the few cases
+   that can't be expressed with semantic tokens. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* ===========================================================================
+   1. SEMANTIC COLOUR TOKENS
+   ---------------------------------------------------------------------------
+   Every neutral in the UI resolves through these names, so a theme swap is a
+   change of token values — never a change of component code.
+
+     app        page background base
+     surface    panel / card background
+     surface-2  nested surface (chart plate, table header, icon wells)
+     sunken     inset wells and progress tracks
+     sunken-strong  heavier insets, hover fills
+     hair       hairline borders and dividers
+     hair-strong  visible borders (inputs, buttons, chips)
+     strong / body / muted / subtle   the four text levels
+
+   Values are declared per theme in the blocks below. Tailwind reads them via
+   --color-* in @theme, so text-strong, bg-surface, border-hair etc. all exist.
+   =========================================================================== */
 @theme {
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  --color-app: var(--c-app);
+  --color-surface: var(--c-surface);
+  --color-surface-2: var(--c-surface-2);
+  --color-sunken: var(--c-sunken);
+  --color-sunken-strong: var(--c-sunken-strong);
+  --color-hair: var(--c-hair);
+  --color-hair-strong: var(--c-hair-strong);
+  --color-strong: var(--c-strong);
+  --color-body: var(--c-body);
+  --color-muted: var(--c-muted);
+  --color-subtle: var(--c-subtle);
+  --color-inverse: var(--c-inverse);
+  --color-inverse-fg: var(--c-inverse-fg);
 
   /* Elevation ramp: soft (resting chips) -> card (panels) -> lift (hover) */
   --shadow-soft: 0 1px 2px 0 rgb(15 23 42 / 0.04), 0 1px 3px 0 rgb(15 23 42 / 0.05);
@@ -16,9 +49,171 @@
   --shadow-lift: 0 2px 6px -2px rgb(15 23 42 / 0.05), 0 26px 50px -24px rgb(15 23 42 / 0.3);
   --shadow-rail: 0 0 0 1px rgb(15 23 42 / 0.03), 24px 0 48px -34px rgb(15 23 42 / 0.4);
   --shadow-pop: 0 12px 32px -12px rgb(15 23 42 / 0.28);
+
+  /* ---------------------------------------------------------------------
+     SQUARE CORNERS (brand direction)
+
+     Redefining Tailwind's radius scale is what makes this a one-file change:
+     rounded-sm/md/lg/xl/2xl/3xl across ~60 call sites all follow these values.
+     rounded-full is intentionally NOT overridden — pills, avatars, status
+     dots and the sidebar's active indicator stay round, which is what keeps
+     the sharp panels reading as deliberate rather than unfinished.
+     Switch the whole app to soft corners with data-radius="soft".
+     --------------------------------------------------------------------- */
+  --radius-xs: 0px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius-2xl: 0px;
+  --radius-3xl: 0px;
+  --radius-4xl: 0px;
 }
 
-/* ------------------------------- Base layer ------------------------------- */
+/* ---------------------------------- Light --------------------------------- */
+:root,
+[data-theme='light'] {
+  --c-app: #f6f8fb;
+  --c-surface: #ffffff;
+  --c-surface-2: #f8fafc;
+  --c-sunken: #f1f5f9;
+  --c-sunken-strong: #e4e9f0;
+  --c-hair: #eef1f6;
+  --c-hair-strong: #dde3ec;
+  /* Four levels, each >= 4.5:1 on both --c-surface and --c-app.
+     Verified by scripts/verify-theme.py — do not lighten without re-running it. */
+  --c-strong: #111827;
+  --c-body: #374151;
+  --c-muted: #4b5563;
+  --c-subtle: #6b7280;
+  /* Inverse surface: tooltips and any "opposite of page" chrome. */
+  --c-inverse: #111827;
+  --c-inverse-fg: #f9fafb;
+
+  --canvas-glow-1: rgb(16 185 129 / 0.22);
+  --canvas-glow-2: rgb(99 102 241 / 0.2);
+  --canvas-glow-3: rgb(245 158 11 / 0.14);
+  --canvas-base-1: #f9fbff;
+  --canvas-base-2: #eef2f8;
+  --canvas-grid: rgb(15 23 42 / 0.055);
+  --glass-bar: rgb(255 255 255 / 0.72);
+  --glass-rail: rgb(255 255 255 / 0.9);
+  --surface-mix: 94%;
+  --focus-ring: #059669;
+
+  color-scheme: light;
+}
+
+/* ---------------------------------- Dark ----------------------------------
+   Not an inversion: navy-tinted surfaces keep the emerald accent legible, and
+   glows are reduced so the canvas stays calm behind dense data. */
+[data-theme='dark'] {
+  --c-app: #070c16;
+  --c-surface: #111a2b;
+  --c-surface-2: #0d1626;
+  --c-sunken: #1a2438;
+  --c-sunken-strong: #26324b;
+  --c-hair: #1e293f;
+  --c-hair-strong: #2c3a55;
+  --c-strong: #f1f5f9;
+  --c-body: #c3cddd;
+  --c-muted: #9db0c9;
+  --c-subtle: #8496b0;
+  --c-inverse: #2b3a52;
+  --c-inverse-fg: #f8fafc;
+
+  --canvas-glow-1: rgb(16 185 129 / 0.14);
+  --canvas-glow-2: rgb(99 102 241 / 0.16);
+  --canvas-glow-3: rgb(245 158 11 / 0.08);
+  --canvas-base-1: #0a1120;
+  --canvas-base-2: #060a12;
+  --canvas-grid: rgb(255 255 255 / 0.045);
+  --glass-bar: rgb(17 26 43 / 0.75);
+  --glass-rail: rgb(13 22 38 / 0.92);
+  --surface-mix: 100%;
+  --focus-ring: #34d399;
+
+  --shadow-soft: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+  --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.5), 0 12px 28px -16px rgb(0 0 0 / 0.7);
+  --shadow-lift: 0 2px 6px -2px rgb(0 0 0 / 0.5), 0 26px 50px -24px rgb(0 0 0 / 0.8);
+  --shadow-rail: 0 0 0 1px rgb(0 0 0 / 0.5), 24px 0 48px -34px rgb(0 0 0 / 0.9);
+  --shadow-pop: 0 12px 32px -12px rgb(0 0 0 / 0.75);
+
+  color-scheme: dark;
+}
+
+/* ----------------------------- High contrast ------------------------------
+   Built for WCAG 2.1 AA at minimum, mostly AAA: pure black on white, opaque
+   surfaces (no translucency behind text), and 2px borders so boundaries do not
+   depend on subtle shading. Decoration is removed rather than dimmed — the
+   canvas glows and the grid are switched off entirely. */
+[data-theme='contrast'] {
+  --c-inverse: #000000;
+  --c-inverse-fg: #ffffff;
+  --c-app: #ffffff;
+  --c-surface: #ffffff;
+  --c-surface-2: #ffffff;
+  --c-sunken: #f2f2f2;
+  --c-sunken-strong: #d9d9d9;
+  --c-hair: #000000;
+  --c-hair-strong: #000000;
+  --c-strong: #000000;
+  --c-body: #111111;
+  --c-muted: #333333;
+  --c-subtle: #4a4a4a;
+
+  --canvas-glow-1: transparent;
+  --canvas-glow-2: transparent;
+  --canvas-glow-3: transparent;
+  --canvas-base-1: #ffffff;
+  --canvas-base-2: #ffffff;
+  --canvas-grid: transparent;
+  --glass-bar: #ffffff;
+  --glass-rail: #ffffff;
+  --surface-mix: 100%;
+  --focus-ring: #0000ee;
+
+  --shadow-soft: none;
+  --shadow-card: none;
+  --shadow-lift: none;
+  --shadow-rail: none;
+  --shadow-pop: 0 6px 0 0 rgb(0 0 0 / 0.9);
+
+  color-scheme: light;
+}
+
+/* ===========================================================================
+   2. DENSITY TOKENS
+   ---------------------------------------------------------------------------
+   Three presets. "comfortable" reproduces the previous spacing exactly, so this
+   is additive: compact tightens for data-heavy screens, executive opens up for
+   presentation. Components consume these through .pad-panel / .pad-tile /
+   .cell-y / .section-stack rather than hard-coded padding utilities.
+   =========================================================================== */
+:root {
+  --pad-panel: 1.5rem;   /* was p-6   */
+  --pad-tile: 1.25rem;   /* was p-5   */
+  --pad-cell: 0.875rem;  /* was py-3.5 */
+  --gap-section: 1.5rem; /* was space-y-6 */
+}
+
+[data-density='compact'] {
+  --pad-panel: 1rem;
+  --pad-tile: 0.875rem;
+  --pad-cell: 0.5rem;
+  --gap-section: 1rem;
+}
+
+[data-density='executive'] {
+  --pad-panel: 2rem;
+  --pad-tile: 1.5rem;
+  --pad-cell: 1.125rem;
+  --gap-section: 2rem;
+}
+
+/* ===========================================================================
+   3. BASE LAYER
+   =========================================================================== */
 html {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
@@ -27,22 +222,33 @@ html {
 }
 
 body {
-  background-color: #f6f8fb;
-  color: #0f172a;
+  background-color: var(--c-app);
+  color: var(--c-strong);
+  /* Backstop: clip (not hidden) creates no scroll container, so position:sticky
+     and fixed children keep working while stray overflow can't add a page
+     scrollbar. */
+  overflow-x: clip;
 }
 
 ::selection {
-  background-color: rgb(16 185 129 / 0.24);
-  color: #064e3b;
+  background-color: color-mix(in oklab, var(--focus-ring) 26%, transparent);
+  color: var(--c-strong);
 }
 
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,
-[tabindex]:focus-visible {
-  outline: 2px solid #10b981;
+[tabindex]:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
-  border-radius: 0.5rem;
+}
+
+[data-theme='contrast'] button:focus-visible,
+[data-theme='contrast'] input:focus-visible,
+[data-theme='contrast'] [tabindex]:focus-visible,
+[data-theme='contrast'] a:focus-visible {
+  outline-width: 3px;
 }
 
 /* Tabular figures keep KPI values and table columns from jittering. */
@@ -51,22 +257,18 @@ select:focus-visible,
   font-feature-settings: 'tnum' 1;
 }
 
-/* --------------------------------- Canvas ---------------------------------
-   The page background is layered rather than flat: three coloured glows over a
-   vertical base gradient, plus a masked grid that fades out below the fold.
-   `isolation: isolate` makes .app-canvas a stacking context so the z-index:-1
-   grid child paints above this element's own background but under the content —
-   without it the grid would be hidden behind the background. */
-
+/* ===========================================================================
+   4. CANVAS
+   =========================================================================== */
 .app-canvas {
   position: relative;
   isolation: isolate;
-  background-color: #f6f8fb;
+  background-color: var(--c-app);
   background-image:
-    radial-gradient(60rem 34rem at 6% -10%, rgb(16 185 129 / 0.22), transparent 62%),
-    radial-gradient(52rem 30rem at 104% 2%, rgb(99 102 241 / 0.2), transparent 60%),
-    radial-gradient(46rem 28rem at 50% 112%, rgb(245 158 11 / 0.14), transparent 64%),
-    linear-gradient(180deg, #f9fbff 0%, #eef2f8 100%);
+    radial-gradient(60rem 34rem at 6% -10%, var(--canvas-glow-1), transparent 62%),
+    radial-gradient(52rem 30rem at 104% 2%, var(--canvas-glow-2), transparent 60%),
+    radial-gradient(46rem 28rem at 50% 112%, var(--canvas-glow-3), transparent 64%),
+    linear-gradient(180deg, var(--canvas-base-1) 0%, var(--canvas-base-2) 100%);
   background-attachment: fixed;
 }
 
@@ -77,23 +279,22 @@ select:focus-visible,
   z-index: -1;
   pointer-events: none;
   background-image:
-    linear-gradient(to right, rgb(15 23 42 / 0.055) 1px, transparent 1px),
-    linear-gradient(to bottom, rgb(15 23 42 / 0.055) 1px, transparent 1px);
+    linear-gradient(to right, var(--canvas-grid) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--canvas-grid) 1px, transparent 1px);
   background-size: 58px 58px;
   -webkit-mask-image: radial-gradient(ellipse 95% 65% at 50% 0%, #000 8%, transparent 80%);
   mask-image: radial-gradient(ellipse 95% 65% at 50% 0%, #000 8%, transparent 80%);
 }
 
-/* -------------------------------- Surfaces --------------------------------
-   One card recipe used by every panel, so radius, border, elevation and the
-   translucent white sit in a single place instead of being restated per block. */
-
+/* ===========================================================================
+   5. SURFACES
+   =========================================================================== */
 .surface {
   position: relative;
-  border-radius: 1rem;
-  border: 1px solid rgb(15 23 42 / 0.055);
-  background-color: rgb(255 255 255 / 0.94);
-  box-shadow: var(--shadow-card), inset 0 1px 0 0 rgb(255 255 255 / 0.75);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--c-hair-strong);
+  background-color: color-mix(in oklab, var(--c-surface) var(--surface-mix), transparent);
+  box-shadow: var(--shadow-card), inset 0 1px 0 0 color-mix(in oklab, var(--c-surface) 78%, transparent);
 }
 
 .surface-lift {
@@ -105,8 +306,17 @@ select:focus-visible,
 
 .surface-lift:hover {
   transform: translateY(-2px);
-  border-color: rgb(16 185 129 / 0.3);
-  box-shadow: var(--shadow-lift), inset 0 1px 0 0 rgb(255 255 255 / 0.8);
+  border-color: color-mix(in oklab, var(--focus-ring) 34%, var(--c-hair-strong));
+  box-shadow: var(--shadow-lift), inset 0 1px 0 0 color-mix(in oklab, var(--c-surface) 82%, transparent);
+}
+
+[data-theme='contrast'] .surface {
+  border-width: 2px;
+}
+
+[data-theme='contrast'] .surface-lift:hover {
+  transform: none;
+  box-shadow: var(--shadow-pop);
 }
 
 /* Top hairline that picks up the card's tone. */
@@ -114,40 +324,83 @@ select:focus-visible,
   content: '';
   position: absolute;
   top: 0;
-  left: 14%;
-  right: 14%;
+  inset-inline: 14%;
   height: 2px;
-  border-radius: 0 0 4px 4px;
   background-image: linear-gradient(90deg, transparent, var(--tone-1, #34d399), transparent);
   opacity: 0.85;
   pointer-events: none;
 }
 
+[data-theme='contrast'] .hairline::after {
+  display: none;
+}
+
 /* Frosted containers reserved for chrome that content scrolls behind. */
 .glass-bar {
-  background-color: rgb(255 255 255 / 0.72);
+  background-color: var(--glass-bar);
   -webkit-backdrop-filter: blur(18px) saturate(1.4);
   backdrop-filter: blur(18px) saturate(1.4);
 }
 
 .glass-rail {
-  background-color: rgb(255 255 255 / 0.9);
+  background-color: var(--glass-rail);
   -webkit-backdrop-filter: blur(20px) saturate(1.3);
   backdrop-filter: blur(20px) saturate(1.3);
 }
 
-/* ------------------------------ Tone system -------------------------------
-   Each tone sets five custom properties; .tile, .hairline, .tone-text and
-   .chip-* below read them, so a component only needs `tone-emerald` etc. */
+[data-theme='contrast'] .glass-bar,
+[data-theme='contrast'] .glass-rail {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border-color: #000;
+}
 
-.tone-emerald { --tone-1: #34d399; --tone-2: #059669; --tone-soft: #ecfdf5; --tone-text: #047857; --tone-glow: rgb(5 150 105 / 0.4); }
-.tone-sky     { --tone-1: #38bdf8; --tone-2: #0284c7; --tone-soft: #f0f9ff; --tone-text: #0369a1; --tone-glow: rgb(2 132 199 / 0.4); }
-.tone-indigo  { --tone-1: #818cf8; --tone-2: #4f46e5; --tone-soft: #eef2ff; --tone-text: #4338ca; --tone-glow: rgb(79 70 229 / 0.4); }
-.tone-violet  { --tone-1: #a78bfa; --tone-2: #7c3aed; --tone-soft: #f5f3ff; --tone-text: #6d28d9; --tone-glow: rgb(124 58 237 / 0.4); }
-.tone-rose    { --tone-1: #fb7185; --tone-2: #e11d48; --tone-soft: #fff1f2; --tone-text: #be123c; --tone-glow: rgb(225 29 72 / 0.38); }
-.tone-amber   { --tone-1: #fbbf24; --tone-2: #d97706; --tone-soft: #fffbeb; --tone-text: #b45309; --tone-glow: rgb(217 119 6 / 0.38); }
-.tone-cyan    { --tone-1: #22d3ee; --tone-2: #0891b2; --tone-soft: #ecfeff; --tone-text: #0e7490; --tone-glow: rgb(8 145 178 / 0.38); }
-.tone-slate   { --tone-1: #94a3b8; --tone-2: #475569; --tone-soft: #f1f5f9; --tone-text: #334155; --tone-glow: rgb(71 85 105 / 0.34); }
+/* Sticky header elevation. The highlight reads as a light source on light
+   themes and as a subtle rim on dark ones, so it can't be a fixed white. */
+.header-elevation {
+  box-shadow:
+    inset 0 1px 0 0 color-mix(in oklab, #ffffff 62%, transparent),
+    0 8px 24px -24px rgb(15 23 42 / 0.4);
+}
+
+[data-theme='dark'] .header-elevation {
+  box-shadow:
+    inset 0 1px 0 0 color-mix(in oklab, #ffffff 7%, transparent),
+    0 8px 24px -20px rgb(0 0 0 / 0.8);
+}
+
+[data-theme='contrast'] .header-elevation {
+  box-shadow: none;
+  border-bottom-width: 2px;
+}
+
+/* ------------------------------- Density --------------------------------- */
+.pad-panel { padding: var(--pad-panel); }
+.pad-tile { padding: var(--pad-tile); }
+.cell-y { padding-block: var(--pad-cell); }
+
+.section-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-section);
+}
+
+/* ===========================================================================
+   6. TONE SYSTEM
+   ---------------------------------------------------------------------------
+   Eight accents. Each sets its two ramp stops; .tile, .hairline, .tone-text and
+   .tone-soft derive their values with color-mix, so tones need no dark-mode
+   variants — mixing toward the current --c-strong automatically produces dark
+   text on light themes and light text on dark ones.
+   =========================================================================== */
+.tone-emerald { --tone-1: #34d399; --tone-2: #059669; --tone-glow: rgb(5 150 105 / 0.4); }
+.tone-sky     { --tone-1: #38bdf8; --tone-2: #0284c7; --tone-glow: rgb(2 132 199 / 0.4); }
+.tone-indigo  { --tone-1: #818cf8; --tone-2: #4f46e5; --tone-glow: rgb(79 70 229 / 0.4); }
+.tone-violet  { --tone-1: #a78bfa; --tone-2: #7c3aed; --tone-glow: rgb(124 58 237 / 0.4); }
+.tone-rose    { --tone-1: #fb7185; --tone-2: #e11d48; --tone-glow: rgb(225 29 72 / 0.38); }
+.tone-amber   { --tone-1: #fbbf24; --tone-2: #d97706; --tone-glow: rgb(217 119 6 / 0.38); }
+.tone-cyan    { --tone-1: #22d3ee; --tone-2: #0891b2; --tone-glow: rgb(8 145 178 / 0.38); }
+.tone-slate   { --tone-1: #94a3b8; --tone-2: #475569; --tone-glow: rgb(71 85 105 / 0.34); }
 
 /* Gradient icon tile — white glyph on the tone's two-colour ramp. */
 .tile {
@@ -156,22 +409,164 @@ select:focus-visible,
   color: #fff;
 }
 
-.tone-text { color: var(--tone-text); }
-.tone-soft { background-color: var(--tone-soft); color: var(--tone-text); }
-
-/* --------------------------------- Charts --------------------------------- */
-/* Frosted backdrop so SVG strokes and grid lines stay legible over the canvas. */
-.chart-plate {
-  border-radius: 0.75rem;
-  border: 1px solid rgb(15 23 42 / 0.045);
-  background-color: rgb(248 250 252 / 0.7);
+/* The top highlight is a light source, so it dims on dark themes rather than
+   glowing at full strength. */
+[data-theme='dark'] .tile {
+  box-shadow: 0 10px 22px -14px var(--tone-glow), inset 0 1px 0 0 rgb(255 255 255 / 0.12);
 }
 
-/* ---------------------------------- Misc ---------------------------------- */
+[data-theme='contrast'] .tile {
+  background-image: none;
+  background-color: var(--tone-2);
+  box-shadow: none;
+  outline: 2px solid #000;
+  outline-offset: -2px;
+}
+
+[data-theme='contrast'] .tile {
+  background-image: none;
+  background-color: #000;
+  border: 2px solid #000;
+  box-shadow: none;
+  color: #fff;
+}
+
+.tone-text {
+  color: color-mix(in oklab, var(--tone-2) 62%, var(--c-strong));
+}
+
+.row-hover:hover {
+  background-color: var(--c-sunken);
+}
+
+@supports (color: color-mix(in lab, red, red)) {
+  .row-hover:hover {
+    background-color: color-mix(in oklab, var(--tone-1, var(--c-hair-strong)) 12%, transparent);
+  }
+}
+
+.tone-soft {
+  background-color: color-mix(in oklab, var(--tone-2) 12%, transparent);
+  color: color-mix(in oklab, var(--tone-2) 62%, var(--c-strong));
+}
+
+[data-theme='contrast'] .row-hover:hover {
+  background-color: var(--c-sunken);
+}
+
+@supports (color: color-mix(in lab, red, red)) {
+  .row-hover:hover {
+    background-color: color-mix(in oklab, var(--tone-1, var(--c-hair-strong)) 12%, transparent);
+  }
+}
+
+.tone-soft {
+  background-color: #fff;
+  color: #000;
+  border: 2px solid #000;
+}
+
+/* --------------------------- Semantic chips ------------------------------ */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: var(--radius-full, 9999px);
+  padding: 0.125rem 0.5rem;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.chip-positive {
+  background-color: color-mix(in oklab, #059669 13%, transparent);
+  color: color-mix(in oklab, #047857 78%, var(--c-strong));
+}
+
+.chip-negative {
+  background-color: color-mix(in oklab, #e11d48 13%, transparent);
+  color: color-mix(in oklab, #be123c 78%, var(--c-strong));
+}
+
+.chip-neutral {
+  background-color: var(--c-sunken);
+  color: var(--c-body);
+}
+
+[data-theme='contrast'] .chip {
+  border: 2px solid #000;
+  background-color: #fff;
+  color: #000;
+}
+
+[data-theme='contrast'] .chip-positive::before { content: '▲ '; }
+[data-theme='contrast'] .chip-negative::before { content: '▼ '; }
+
+/* --------------------------------- Charts --------------------------------- */
+.chart-plate {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--c-hair);
+  background-color: color-mix(in oklab, var(--c-surface-2) 78%, transparent);
+}
+
+/* ===========================================================================
+   7. ACCENT COLOUR COMPATIBILITY
+   ---------------------------------------------------------------------------
+   Components still use Tailwind's accent utilities directly for one-off
+   emphasis (bg-emerald-50, text-rose-700 and so on). Rather than rewrite ~120
+   call sites, those utilities are re-pointed at theme-aware mixes here. Kept
+   deliberately small and explicit; new code should prefer .chip-* and the
+   tone-* system above.
+   =========================================================================== */
+[data-theme='dark'] .bg-emerald-50,
+[data-theme='dark'] .bg-emerald-50\/40,
+[data-theme='dark'] .bg-emerald-100 { background-color: color-mix(in oklab, #059669 20%, transparent); }
+
+[data-theme='dark'] .bg-rose-50,
+[data-theme='dark'] .bg-rose-100 { background-color: color-mix(in oklab, #e11d48 20%, transparent); }
+
+[data-theme='dark'] .bg-amber-50,
+[data-theme='dark'] .bg-amber-100 { background-color: color-mix(in oklab, #d97706 20%, transparent); }
+
+[data-theme='dark'] .bg-indigo-50,
+[data-theme='dark'] .bg-indigo-100 { background-color: color-mix(in oklab, #4f46e5 22%, transparent); }
+
+[data-theme='dark'] .bg-cyan-50 { background-color: color-mix(in oklab, #0891b2 20%, transparent); }
+
+[data-theme='dark'] .text-emerald-600,
+[data-theme='dark'] .text-emerald-700,
+[data-theme='dark'] .text-emerald-800 { color: #6ee7b7; }
+
+[data-theme='dark'] .text-rose-500,
+[data-theme='dark'] .text-rose-600,
+[data-theme='dark'] .text-rose-700 { color: #fda4af; }
+
+[data-theme='dark'] .text-amber-500,
+[data-theme='dark'] .text-amber-600,
+[data-theme='dark'] .text-amber-700 { color: #fcd34d; }
+
+[data-theme='dark'] .text-indigo-500,
+[data-theme='dark'] .text-indigo-600,
+[data-theme='dark'] .text-indigo-700 { color: #a5b4fc; }
+
+[data-theme='dark'] .text-cyan-600,
+[data-theme='dark'] .text-cyan-700 { color: #67e8f9; }
+
+[data-theme='dark'] .ring-emerald-100,
+[data-theme='dark'] .ring-emerald-200 { --tw-ring-color: color-mix(in oklab, #059669 40%, transparent); }
+
+[data-theme='dark'] .ring-rose-100 { --tw-ring-color: color-mix(in oklab, #e11d48 40%, transparent); }
+
+[data-theme='dark'] .ring-white { --tw-ring-color: var(--c-surface); }
+
+/* ===========================================================================
+   8. SCROLLBARS, MOTION, PRINT
+   =========================================================================== */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-track { background: rgb(241 245 249 / 0.7); border-radius: 4px; }
-::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+::-webkit-scrollbar-track { background: color-mix(in oklab, var(--c-sunken) 70%, transparent); border-radius: 4px; }
+::-webkit-scrollbar-thumb { background: var(--c-sunken-strong); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: color-mix(in oklab, var(--c-muted) 60%, var(--c-sunken-strong)); }
 
 table { border-collapse: collapse; width: 100%; }
 

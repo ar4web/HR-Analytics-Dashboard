@@ -29,6 +29,36 @@ window.addEventListener("message",function(e){if(!e.data||typeof e.data.type!=="
 loadRrweb();
 })();</script>
   <script data-arena-views="true">(function(){var isTop=false;try{isTop=window.self===window.top;}catch(e){}if(!isTop)return;window.__ARENA_META={generationId:"glm-5",tournamentId:"56317e8d-3f14-49cd-a90c-358285261678"};var payload={tournamentId:"56317e8d-3f14-49cd-a90c-358285261678",modelId:"glm-5"};try{var r=document.referrer;if(r){var u=new URL(r);payload.referrerDomain=u.hostname;}}catch(e){}try{var vid=null;try{vid=localStorage.getItem('arena_vid');}catch(e){}if(!vid){vid=typeof crypto!=="undefined"&&crypto.randomUUID?crypto.randomUUID():(Date.now().toString(36)+Math.random().toString(36).slice(2)).slice(0,32);try{localStorage.setItem('arena_vid',vid);}catch(e){}}if(vid)payload.viewerId=vid;}catch(e){}try{fetch("https://www.designarena.ai/api/agon/page-views",{"method":"POST","headers":{"Content-Type":"application/json"},"body":JSON.stringify(payload),"keepalive":true});}catch(e){}})();</script>
+  <script data-appearance="true">(function(){
+/* Applies the stored appearance before first paint so the page never flashes the
+   wrong theme. ThemeProvider reads the same key and keeps <html> in sync after
+   hydration — keep the allowlists and the key in step with
+   src/theme/ThemeProvider.tsx. Note the parse is guarded separately: a corrupted
+   value must not stop dir/lang from being applied. */
+var THEMES=['system','light','dark','contrast'],
+    RESOLVED=['light','dark','contrast'],
+    DENSITIES=['compact','comfortable','executive'],
+    DIRECTIONS=['ltr','rtl'];
+try{
+  var s={};
+  try{
+    var raw=localStorage.getItem('hr-dash:appearance');
+    if(raw)s=JSON.parse(raw)||{};
+  }catch(e){s={};}
+  var theme=THEMES.indexOf(s.theme)>-1?s.theme:'system',
+      density=DENSITIES.indexOf(s.density)>-1?s.density:'comfortable',
+      dir=DIRECTIONS.indexOf(s.direction)>-1?s.direction:'ltr';
+  var dark=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches,
+      resolved=theme==='system'?(dark?'dark':'light'):theme;
+  if(RESOLVED.indexOf(resolved)===-1)resolved='light';
+  var el=document.documentElement;
+  el.dataset.theme=resolved;
+  el.dataset.themePreference=theme;
+  el.dataset.density=density;
+  el.dir=dir;
+  el.lang=dir==='rtl'?'ar':'en';
+}catch(e){}
+})();</script>
 </head>
   <body>
     <div id="root"></div>

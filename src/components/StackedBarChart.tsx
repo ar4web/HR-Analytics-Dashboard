@@ -16,7 +16,7 @@ export function StackedBarChart({ data, title, height = 200 }: StackedBarChartPr
 
   return (
     <div className="w-full">
-      {title && <h4 className="mb-4 text-sm font-semibold text-gray-700">{title}</h4>}
+      {title && <h4 className="mb-4 text-sm font-semibold text-body">{title}</h4>}
       <div className="space-y-3" style={{ minHeight: height }}>
         {data.map((item, index) => {
           const total = item.values.reduce((sum, v) => sum + v.value, 0);
@@ -28,11 +28,11 @@ export function StackedBarChart({ data, title, height = 200 }: StackedBarChartPr
               transition={{ delay: index * 0.05, duration: 0.4 }}
               className="group flex items-center gap-3"
             >
-              <span className="w-24 shrink-0 truncate text-xs font-medium text-gray-600 transition-colors group-hover:text-gray-900">
+              <span className="w-24 shrink-0 truncate text-xs font-medium text-body transition-colors group-hover:text-strong">
                 {item.label}
               </span>
 
-              <div className="flex h-7 flex-1 overflow-hidden rounded-lg bg-gray-100 ring-1 ring-inset ring-gray-200/70">
+              <div className="flex h-7 flex-1 overflow-hidden rounded-lg bg-sunken ring-1 ring-inset ring-hair-strong/70">
                 {item.values.map((v, i) => {
                   const width = (v.value / maxTotal) * 100;
                   return (
@@ -55,9 +55,9 @@ export function StackedBarChart({ data, title, height = 200 }: StackedBarChartPr
                 })}
               </div>
 
-              <div className="w-14 shrink-0 text-right">
-                <span className="tnum text-xs font-semibold text-gray-900">{total}</span>
-                <span className="ml-1 text-[10px] font-medium text-gray-400">
+              <div className="w-14 shrink-0 text-end">
+                <span className="tnum text-xs font-semibold text-strong">{total}</span>
+                <span className="ms-1 text-[10px] font-medium text-subtle">
                   {((total / maxTotal) * 100).toFixed(0)}%
                 </span>
               </div>
