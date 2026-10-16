@@ -84,8 +84,11 @@ and are gone.
 | `src/data/random.ts` | Seeded PRNG (mulberry32) plus weighted / normal / skewed draws. Deterministic on purpose — the numbers must not change between reloads or between builds. |
 | `src/data/employees.ts` | The 1,247-record population, its configuration (headcounts, salaries, attrition rates, compa-ratios, time-to-fill) and `AS_OF_DATE` / `PERIOD_START`. |
 | `src/data/metrics.ts` | Every KPI and chart series, computed. Each metric carries value + target + direction + cadence. |
+| `src/data/saudi.ts` | The Saudi reference layer: cities, labour-law entitlements, GOSI/levy/Nitaqat/WPS rules, holidays, Umm al-Qura conversion, prayer times, SAR formatting. Constants and pure functions only — no workforce figures. |
+| `src/data/compliance.ts` | The regulatory view composed from `metrics.ts` plus `saudi.ts`: Nitaqat ladder, GOSI/WPS/expat-cost roll-ups, document queue, statutory framework, holiday calendar. |
 | `src/data/palette.ts` | Series colours. Wong/IBM accessible palettes, **not** the brand emerald. |
 | `src/data/hrData.ts` | Adapter over the above, keeping the old export names so panels migrate one at a time. New code imports from `metrics.ts`. |
+| `src/components/ui.tsx` | Shared primitives (`Panel`, `CardHeader`, `MiniStat`, `StatusPill`, `ProgressBar`, `DataRow`). New panels compose these rather than restating a card. |
 
 - **To change a number, change the population or a rate constant — never a literal in a component.**
   Headcounts are seeded as slots and paired off, so department and location totals are exact; if you
@@ -93,6 +96,17 @@ and are gone.
 - **Fields are generated in dependency order** (tenure → rating → attendance/engagement → pay →
   leave). Independent draws produce a population that does not hang together — a hundred
   five-year veterans rated "Below" with 60% attendance is not a company.
+- **A metric id that no longer exists throws at module load and takes the app down**, not just the
+  panel that reads it — `kpiData` in `hrData.ts` did exactly that for `activeEmployees`. Metric
+  strips are re-readable by id (`metric()`), so keep the ids in step with the strips.
+- **A target derived from the thing it measures is not a target.** Each department's Saudization
+  target is a separate `saudizationTarget` from the generation ratio `saudization`; when the two
+  shared one field every department sat exactly on target and every reported gap was rounding.
+- **One exception pattern is worth more than random noise.** `payrollRuns` uses a fixed exception
+  map: a random draw gave zero late runs across twelve months, so the panel reported perfect WPS
+  compliance it had never earned.
+- **`--c-subtle` is text, not decoration.** All four text levels are verified against both
+  `--c-surface` and `--c-app` by `scripts/verify-theme.py`; do not lighten one without re-running it.
 - **`AS_OF_DATE` is the previous month end, not today.** A mid-month cutoff makes the final bar of
   every monthly chart a partial month, so it reads as a collapse in hiring rather than an
   unfinished period. It also keeps the figures stable for the whole of a month.

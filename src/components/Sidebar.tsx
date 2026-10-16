@@ -2,8 +2,8 @@ import { useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
   Award, BarChart3, Building2, ChevronLeft, ChevronRight, Clock, FileText,
-  GraduationCap, HelpCircle, LayoutDashboard, LogOut, Settings, UserPlus, Users,
-  Wallet, X,
+  GraduationCap, HelpCircle, LayoutDashboard, LogOut, Settings, ShieldCheck,
+  UserPlus, Users, Wallet, X,
 } from 'lucide-react';
 
 interface NavItem {
@@ -33,6 +33,13 @@ const navSections: { title: string; items: NavItem[] }[] = [
     ],
   },
   {
+    title: 'Compliance',
+    items: [
+      { key: 'compliance', label: 'Saudization', icon: ShieldCheck },
+      { key: 'documents', label: 'Documents & Iqama', icon: FileText },
+    ],
+  },
+  {
     title: 'Organization',
     items: [
       { key: 'reports', label: 'Reports', icon: FileText, badge: 3 },
@@ -51,6 +58,15 @@ interface SidebarProps {
   onToggleCollapsed: () => void;
   mobileOpen: boolean;
   onCloseMobile: () => void;
+  /** Active module key. Controlled by App so the main region can follow it. */
+  activeKey: string;
+  onSelect: (key: string) => void;
+  /**
+   * Live counts for the nav badges, keyed by module. A hardcoded badge in the
+   * nav is worse than no badge: it keeps claiming 24 expired documents after
+   * somebody renews them.
+   */
+  badges?: Record<string, number>;
 }
 
 /**
@@ -62,8 +78,15 @@ interface SidebarProps {
  * - desktop rail: 96px (~1 inch), icons only, labels and badges fade to zero width
  *   (`collapsed`). Must stay in sync with the `lg:pl-*` offset on the App root.
  */
-export function Sidebar({ collapsed, onToggleCollapsed, mobileOpen, onCloseMobile }: SidebarProps) {
-  const [activeKey, setActiveKey] = useState('dashboard');
+export function Sidebar({
+  collapsed,
+  onToggleCollapsed,
+  mobileOpen,
+  onCloseMobile,
+  activeKey,
+  onSelect,
+  badges = {},
+}: SidebarProps) {
   const [hovered, setHovered] = useState<{ label: string; top: number; badge?: number } | null>(null);
 
   // Labels collapse to zero width at lg only — on mobile the drawer always shows them.
@@ -74,6 +97,7 @@ export function Sidebar({ collapsed, onToggleCollapsed, mobileOpen, onCloseMobil
   const renderItem = (item: NavItem) => {
     const Icon = item.icon;
     const isActive = activeKey === item.key;
+    const badge = badges[item.key] ?? item.badge;
 
     return (
       <button
@@ -81,13 +105,13 @@ export function Sidebar({ collapsed, onToggleCollapsed, mobileOpen, onCloseMobil
         type="button"
         aria-current={isActive ? 'page' : undefined}
         onClick={() => {
-          setActiveKey(item.key);
+          onSelect(item.key);
           onCloseMobile();
         }}
         onMouseEnter={(event) => {
           if (!collapsed) return;
           const rect = event.currentTarget.getBoundingClientRect();
-          setHovered({ label: item.label, top: rect.top + rect.height / 2, badge: item.badge });
+          setHovered({ label: item.label, top: rect.top + rect.height / 2, badge });
         }}
         onMouseLeave={() => setHovered(null)}
         className={`group relative flex h-12 w-full items-center rounded-xl ps-4 pe-2 text-start transition-colors duration-200 ${
@@ -106,20 +130,20 @@ export function Sidebar({ collapsed, onToggleCollapsed, mobileOpen, onCloseMobil
 
         <span className="relative grid h-10 w-10 shrink-0 place-items-center">
           <Icon className="h-5 w-5" strokeWidth={isActive ? 2.4 : 2} />
-          {collapsed && item.badge ? (
+          {collapsed && badge ? (
             <span className="absolute end-0.5 top-0.5 hidden h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-surface lg:block" />
           ) : null}
         </span>
 
         <span className={`text-sm font-medium ${labelClass}`}>{item.label}</span>
 
-        {item.badge ? (
+        {badge ? (
           <span
             className={`ms-auto rounded-full px-2 py-0.5 text-[11px] font-semibold transition-all duration-300 ${
               collapsed ? 'lg:max-w-0 lg:overflow-hidden lg:px-0 lg:opacity-0' : ''
             } ${isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-sunken text-body'}`}
           >
-            {item.badge}
+            {badge}
           </span>
         ) : null}
       </button>

@@ -4,7 +4,7 @@ import {
   Users, UserCheck, UserPlus, TrendingUp, TrendingDown, DollarSign,
   Calendar, Clock, Building2, Download, Bell,
   Search, ChevronDown, ChevronRight, BarChart3, PieChart, Activity,
-  MapPin, Briefcase, Award, AlertCircle, Menu, Sparkles
+  MapPin, Briefcase, Award, AlertCircle, Menu, Sparkles, Moon
 } from 'lucide-react';
 import { KPICard } from './components/KPICard';
 import type { CardTrend, Tone } from './components/KPICard';
@@ -15,13 +15,19 @@ import { StackedBarChart } from './components/StackedBarChart';
 import { FilterBar } from './components/FilterBar';
 import { Sidebar } from './components/Sidebar';
 import { ThemeMenu } from './components/ThemeMenu';
+import { CompliancePanel } from './components/CompliancePanel';
 import {
   kpiData, departmentBreakdown, hiringTrends, attritionData,
   demographicsData, attendanceData, performanceData, locationData,
   leaveData, recentActivities, departments, locations
 } from './data/hrData';
 import { SERIES as SERIES_PALETTE } from './data/palette';
-import { executiveMetrics, operationalMetrics, reportingPeriod, type MetricDefinition } from './data/metrics';
+import {
+  calendar, executiveMetrics, operationalMetrics, ramadan,
+  reportingPeriod, workingHours, type MetricDefinition,
+} from './data/metrics';
+import { formatSAR, formatSARCompact } from './data/saudi';
+import { documents } from './data/compliance';
 
 /* Colour + tone maps keep the department palette in one place instead of
    repeating a ternary chain per chart. */
@@ -77,8 +83,12 @@ function formatMetricValue(metric: MetricDefinition): { display: string; prefix?
     case 'percent':
       return { display: metric.value.toFixed(1), suffix: '%' };
     case 'currency':
-      // Abbreviated: a full dollar figure does not fit a card at this size.
-      return { display: `$${Math.round(metric.value / 1000)}k` };
+      // Abbreviated: a full riyal figure does not fit a card at this size.
+      return { display: formatSARCompact(metric.value), prefix: 'SAR' };
+    case 'currencyMonthly':
+      // A monthly figure is read against a salary, so it is exact rather than
+      // abbreviated — "18k" hides the tens and units a payroll reader needs.
+      return { display: formatSAR(metric.value), prefix: 'SAR' };
     case 'days':
       // Two different meanings share this unit: a duration (time-to-fill, 39.4
       // days) reads fine with a decimal, but a total day count (leave liability)
@@ -95,7 +105,11 @@ function formatMetricValue(metric: MetricDefinition): { display: string; prefix?
 
 function formatTarget(metric: MetricDefinition): string | undefined {
   if (metric.target === null) return undefined;
-  const unit = metric.unit === 'percent' ? '%' : metric.unit === 'days' ? ' days' : metric.unit === 'score' ? '' : '';
+  const unit =
+    metric.unit === 'percent' ? '%'
+    : metric.unit === 'days' ? ' days'
+    : metric.unit === 'currency' || metric.unit === 'currencyMonthly' ? ' SAR'
+    : '';
   return `Target: ${metric.target}${unit}`;
 }
 
@@ -121,7 +135,8 @@ function metricTrend(metric: MetricDefinition): CardTrend {
   let label: string;
   if (metric.unit === 'percent') label = `${delta > 0 ? '+' : ''}${delta.toFixed(1)} pts`;
   else if (metric.unit === 'days') label = `${delta > 0 ? '+' : ''}${delta.toFixed(1)} d`;
-  else if (metric.unit === 'currency') label = `${delta > 0 ? '+' : '-'}$${Math.abs(Math.round(delta / 1000))}k`;
+  else if (metric.unit === 'currency') label = `${delta > 0 ? '+' : '−'}SAR ${formatSARCompact(Math.abs(delta))}`;
+  else if (metric.unit === 'currencyMonthly') label = `${delta > 0 ? '+' : '−'}SAR ${formatSAR(Math.abs(delta))}`;
   else label = `${delta > 0 ? '+' : ''}${Math.round(delta)}`;
 
   return { status, label: `${label} vs target` };
@@ -140,6 +155,8 @@ const ACTIVITY_TONES: Record<string, Tone> = {
 const LEAVE_TONES: Tone[] = ['emerald', 'rose', 'indigo', 'violet'];
 
 export default function App() {
+  /** Which module the main region renders. */
+  const [activeModule, setActiveModule] = useState('dashboard');
   const [activeFilters, setActiveFilters] = useState<Record<string, string>>({
     month: 'all',
     department: 'all',
@@ -283,6 +300,9 @@ export default function App() {
         onToggleCollapsed={() => setSidebarCollapsed(prev => !prev)}
         mobileOpen={mobileNavOpen}
         onCloseMobile={() => setMobileNavOpen(false)}
+        activeKey={activeModule}
+        onSelect={setActiveModule}
+        badges={{ documents: documents.expiredCount }}
       />
 
       {/* Mobile scrim */}
@@ -297,7 +317,7 @@ export default function App() {
       {/* Header */}
       <header className="glass-bar header-elevation sticky top-0 z-40 border-b border-hair-strong/70">
         <div className="max-w-[1600px] mx-auto px-6 py-3.5">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-y-3">
             <div className="flex items-center gap-3">
               <button
                 type="button"
@@ -310,9 +330,14 @@ export default function App() {
               <div className="p-2 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl shadow-lg shadow-emerald-500/25 lg:hidden">
                 <BarChart3 className="w-6 h-6 text-white" />
               </div>
-              <div>
-                <h1 className="text-lg font-bold tracking-[-0.01em] text-strong">HR Analytics Dashboard</h1>
-                <p className="text-xs text-muted">Real-time workforce insights</p>
+              <div className="min-w-0">
+                <h1 className="text-lg font-bold tracking-[-0.01em] text-strong">
+                  HR Analytics Dashboard
+                </h1>
+                <p className="text-xs text-muted">
+                  Real-time workforce insights ·{' '}
+                  <span dir="rtl" lang="ar" className="inline-block">لوحة تحليلات الموارد البشرية</span>
+                </p>
               </div>
             </div>
 
@@ -345,11 +370,11 @@ export default function App() {
               {/* Profile */}
               <button className="flex items-center gap-2 rounded-xl ps-1.5 pe-2 py-1.5 ms-1 border border-hair-strong bg-surface/80 shadow-soft hover:bg-surface transition-colors">
                 <span className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-emerald-400 to-emerald-600 text-white font-bold text-xs ring-1 ring-emerald-600/20">
-                  JD
+                  AQ
                 </span>
                 <span className="hidden lg:block text-start">
-                  <span className="block text-xs font-semibold text-strong">John Doe</span>
-                  <span className="block text-[11px] text-muted">HR Admin</span>
+                  <span className="block text-xs font-semibold text-strong">Abdullah Al-Qahtani</span>
+                  <span className="block text-[11px] text-muted">HR Director · Riyadh</span>
                 </span>
                 <ChevronDown className="w-4 h-4 text-subtle" />
               </button>
@@ -359,6 +384,10 @@ export default function App() {
       </header>
 
       <main className="section-stack max-w-[1600px] mx-auto px-6 py-6">
+        {activeModule === 'compliance' || activeModule === 'documents' ? (
+          <CompliancePanel focus={activeModule === 'documents' ? 'documents' : 'all'} />
+        ) : (
+        <>
         {/* Page intro: breadcrumb, live status, reporting period */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-xs">
@@ -375,6 +404,24 @@ export default function App() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span
+              className="inline-flex items-center gap-1.5 rounded-lg bg-surface/80 px-2.5 py-1.5 font-medium text-body ring-1 ring-hair shadow-soft"
+              title={calendar.hijriArabic}
+            >
+              <Moon className="h-3.5 w-3.5 text-subtle" />
+              {calendar.hijri}
+            </span>
+            {ramadan.isRamadan ? (
+              <span className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500/10 px-2.5 py-1.5 font-medium text-amber-700 ring-1 ring-amber-500/30 shadow-soft">
+                <Moon className="h-3.5 w-3.5" />
+                Ramadan day {ramadan.dayOfRamadan} — {workingHours.effective}h day
+              </span>
+            ) : ramadan.daysUntil !== null && ramadan.daysUntil <= 60 ? (
+              <span className="inline-flex items-center gap-1.5 rounded-lg bg-surface/80 px-2.5 py-1.5 font-medium text-body ring-1 ring-hair shadow-soft">
+                <Moon className="h-3.5 w-3.5 text-subtle" />
+                Ramadan in {ramadan.daysUntil} days
+              </span>
+            ) : null}
             <span className="inline-flex items-center gap-1.5 rounded-lg bg-surface/80 px-2.5 py-1.5 font-medium text-body ring-1 ring-hair shadow-soft">
               <Calendar className="h-3.5 w-3.5 text-subtle" />
               {reportingPeriod}
@@ -751,9 +798,19 @@ export default function App() {
           />
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {leaveData.map((leave, index) => {
-              const totalDays = leave.used + leave.remaining;
-              const usedShare = (leave.used / totalDays) * 100;
+              /*
+               * Sick and parental leave are granted per year, not accrued, so
+               * they have no carry-over balance. Those tiles report use against
+               * the statutory grant instead of inventing a remainder, which is
+               * what a naive `entitlement - used` would do for 120 days of sick
+               * cover sitting untouched in 1,100 records.
+               */
+              const isBalance = leave.remaining !== null;
+              const base = leave.entitlement * (leave.type === 'Annual Leave' ? 1 : 1);
+              const totalDays = isBalance ? leave.used + (leave.remaining ?? 0) : base;
+              const usedShare = totalDays > 0 ? Math.min(100, (leave.used / totalDays) * 100) : 0;
               const tone = LEAVE_TONES[index % LEAVE_TONES.length];
+
               return (
                 <motion.div
                   key={leave.type}
@@ -765,7 +822,10 @@ export default function App() {
                   <span className="tile absolute inset-y-0 start-0 w-1 rounded-e-full" aria-hidden />
 
                   <div className="flex items-center justify-between gap-2 ps-1.5">
-                    <p className="truncate text-xs font-semibold text-body">{leave.type}</p>
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-semibold text-body">{leave.type}</p>
+                      <p className="truncate text-[10px] text-subtle" dir="rtl" lang="ar">{leave.typeAr}</p>
+                    </div>
                     <span className="tone-soft shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ring-1 ring-inset ring-hair/30">
                       {usedShare.toFixed(0)}% used
                     </span>
@@ -773,11 +833,15 @@ export default function App() {
 
                   <div className="mt-3 flex items-end justify-between gap-2 ps-1.5">
                     <div>
-                      <p className="tnum text-2xl font-bold leading-none text-strong">{leave.remaining}</p>
-                      <p className="mt-1 text-[11px] text-muted">days remaining</p>
+                      <p className="tnum text-2xl font-bold leading-none text-strong">
+                        {isBalance ? leave.remaining : leave.entitlement}
+                      </p>
+                      <p className="mt-1 text-[11px] text-muted">
+                        {isBalance ? 'days remaining' : 'days of cover'}
+                      </p>
                     </div>
                     <div className="text-end">
-                      <p className="tnum text-sm font-semibold text-rose-500">{leave.used}</p>
+                      <p className="tnum text-sm font-semibold text-rose-500">{leave.used.toLocaleString()}</p>
                       <p className="text-[11px] text-muted">used</p>
                     </div>
                   </div>
@@ -791,12 +855,18 @@ export default function App() {
                     />
                     <span className="h-full flex-1 bg-gradient-to-r from-emerald-400 to-emerald-500" />
                   </div>
-                  <p className="tnum mt-2 ps-1.5 text-[10px] font-medium text-subtle">{totalDays.toLocaleString()} days entitlement</p>
+                  <p className="tnum mt-2 ps-1.5 text-[10px] font-medium text-subtle">
+                    {isBalance
+                      ? `${totalDays.toLocaleString()} days entitlement`
+                      : 'statutory grant — not carried over'}
+                  </p>
                 </motion.div>
               );
             })}
           </div>
         </motion.div>
+        </>
+        )}
       </main>
 
       {/* Footer */}

@@ -1,41 +1,53 @@
 /**
  * Every number on the dashboard, computed from `employees`.
  *
- * Nothing here is typed in by hand. If a figure looks wrong, the fix belongs in
- * the population (or in a rate constant in employees.ts), not in a literal here.
+ * Nothing is typed in by hand. If a figure looks wrong the fix belongs in the
+ * population, or in a rate constant in `saudi.ts`, not in a literal here.
  *
- * Each metric returns value + target + direction where a target exists, because
- * a KPI without a comparison is decoration — see PLAN.md §3. `inverse` means
- * lower is better (time-to-fill, attrition), which the UI uses to decide
- * whether the delta should read as good or bad.
+ * Compliance figures carry their source and their review cadence, because in a
+ * Saudi establishment these are the numbers an inspector asks about: Saudization
+ * and the Nitaqat band, GOSI contributions, WPS wage compliance, iqama and
+ * passport validity, and the accrued end-of-service liability.
  */
 import {
   AS_OF_DATE,
+  CITY_HEADCOUNTS,
   DEPARTMENTS,
   LEAVE_TYPES,
-  LOCATIONS,
   PERIOD_START,
   activeEmployees,
+  annualLeaveEntitlement,
   employees,
-  type Department,
+  tenureYears,
   type Employee,
   type Rating,
 } from './employees';
+import {
+  COMPLIANCE,
+  GOSI,
+  LABOUR_LAW,
+  SAUDI_TIME_ZONE,
+  formatGregorian,
+  hijriParts,
+  nitaqatBand,
+  prayerTimes,
+  ramadanState,
+  toHijri,
+  type NitaqatBand,
+  CITIES,
+} from './saudi';
 import { createRandom, randNormal, type Random } from './random';
 
 export interface MetricDefinition {
   id: string;
   label: string;
+  labelAr: string;
   value: number;
-  /** Display unit, e.g. '%' | 'days' | '$' | 'score'. */
-  unit: 'percent' | 'days' | 'currency' | 'score' | 'count';
-  /** Where the organisation wants to be. Null when there is no universal target. */
+  unit: 'percent' | 'days' | 'currency' | 'currencyMonthly' | 'score' | 'count';
   target: number | null;
   /** True when a lower value is better. */
   inverse?: boolean;
-  /** How often this should be reviewed. Figma-of-record for the metric dictionary. */
   cadence: 'weekly' | 'monthly' | 'quarterly' | 'annually';
-  /** One line explaining what the number means, shown in the tile's tooltip. */
   hint: string;
 }
 
@@ -47,29 +59,49 @@ const round = (value: number, decimals = 0) => {
 const mean = (values: number[]): number =>
   values.length ? values.reduce((sum, v) => sum + v, 0) / values.length : 0;
 
-function monthKey(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-}
+const sum = (values: number[]): number => values.reduce((a, b) => a + b, 0);
 
 function monthLabel(date: Date): string {
   return date.toLocaleString('en-US', { month: 'short' });
 }
 
-/** The trailing twelve months, oldest first. */
+// ---------------------------------------------------------------------------
+// Reporting window
+// ---------------------------------------------------------------------------
+
 export const reportingMonths: { key: string; label: string }[] = (() => {
   const months: { key: string; label: string }[] = [];
   for (let offset = 11; offset >= 0; offset--) {
-    const date = new Date(AS_OF_DATE.getFullYear(), AS_OF_DATE.getMonth() - offset, 1);
-    months.push({ key: monthKey(date), label: monthLabel(date) });
+    const date = new Date(Date.UTC(AS_OF_DATE.getUTCFullYear(), AS_OF_DATE.getUTCMonth() - offset, 1));
+    months.push({ key: `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`, label: monthLabel(date) });
   }
   return months;
 })();
 
-/** Human-readable period, e.g. "Nov 2025 – Oct 2026". */
 export const reportingPeriod = (() => {
-  const first = new Date(AS_OF_DATE.getFullYear(), AS_OF_DATE.getMonth() - 11, 1);
-  return `${monthLabel(first)} ${first.getFullYear()} – ${monthLabel(AS_OF_DATE)} ${AS_OF_DATE.getFullYear()}`;
+  const first = new Date(Date.UTC(AS_OF_DATE.getUTCFullYear(), AS_OF_DATE.getUTCMonth() - 11, 1));
+  return `${monthLabel(first)} ${first.getUTCFullYear()} – ${monthLabel(AS_OF_DATE)} ${AS_OF_DATE.getUTCFullYear()}`;
 })();
+
+/** Today in both calendars, and where the organisation sits in the Hijri year. */
+export const calendar = {
+  asOf: AS_OF_DATE,
+  gregorian: new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(AS_OF_DATE),
+  hijri: toHijri(AS_OF_DATE),
+  hijriArabic: toHijri(AS_OF_DATE, { arabicNumerals: true }),
+  hijriParts: hijriParts(AS_OF_DATE),
+  timeZone: SAUDI_TIME_ZONE,
+};
+
+/** Ramadan changes the working day, so the dashboard states it explicitly. */
+export const ramadan = ramadanState(AS_OF_DATE);
+export const workingHours = {
+  normal: LABOUR_LAW.workingHours.normal,
+  weekly: LABOUR_LAW.workingHours.weekly,
+  effective: ramadan.isRamadan ? LABOUR_LAW.workingHours.ramadan : LABOUR_LAW.workingHours.normal,
+  effectiveWeekly: ramadan.isRamadan ? LABOUR_LAW.workingHours.ramadanWeekly : LABOUR_LAW.workingHours.weekly,
+  basis: ramadan.isRamadan ? 'Ramadan hours (Art. 98)' : 'Standard hours (Art. 98)',
+};
 
 // ---------------------------------------------------------------------------
 // Headcount and movement
@@ -81,208 +113,558 @@ export const headcount = {
   onLeave: employees.filter((e) => e.status === 'On Leave').length,
   departed: employees.filter((e) => e.status === 'Inactive').length,
   departments: DEPARTMENTS.length,
+  cities: CITY_HEADCOUNTS.length,
 };
 
-/** People whose join date falls in the trailing twelve months. */
 export const newHires = employees.filter((e) => new Date(e.joinDate) >= PERIOD_START);
-
-/** People who left during the trailing twelve months. */
 export const leavers = employees.filter((e) => e.exitDate && new Date(e.exitDate) >= PERIOD_START);
 
-/**
- * Annual turnover: leavers over the period divided by average headcount.
- * Average headcount is opening + closing / 2, which is the standard formula and
- * avoids the flattery of dividing by today's (larger) number.
- */
 export const turnover = {
   value: round((leavers.length / ((headcount.total + (headcount.total - newHires.length + leavers.length)) / 2)) * 100, 1),
   voluntary: leavers.filter((e) => e.exitType === 'voluntary').length,
   involuntary: leavers.filter((e) => e.exitType === 'involuntary').length,
+  /** Saudi and expatriate turnover behave very differently and are watched separately. */
+  saudiRate: round((leavers.filter((e) => e.isSaudi).length / Math.max(1, employees.filter((e) => e.isSaudi).length)) * 100, 1),
+  expatRate: round((leavers.filter((e) => !e.isSaudi).length / Math.max(1, employees.filter((e) => !e.isSaudi).length)) * 100, 1),
 };
 
 // ---------------------------------------------------------------------------
-// Pay
+// Saudization and Nitaqat — the primary compliance figure
 // ---------------------------------------------------------------------------
 
-export const pay = {
-  average: Math.round(mean(activeEmployees.map((e) => e.salary))),
-  median: (() => {
-    const sorted = activeEmployees.map((e) => e.salary).sort((a, b) => a - b);
-    const mid = Math.floor(sorted.length / 2);
-    return sorted.length % 2 ? sorted[mid] : Math.round((sorted[mid - 1] + sorted[mid]) / 2);
+export interface SaudizationRow {
+  name: string;
+  nameAr: string;
+  total: number;
+  saudis: number;
+  expats: number;
+  percent: number;
+  target: number;
+  /** Percentage points below the configured target; negative means ahead. */
+  gap: number;
+  /** Whole Saudi hires needed to reach the target. The actionable figure. */
+  needed: number;
+}
+
+/**
+ * How far below a department target counts as a gap. Headcount is a whole
+ * number, so a ratio target can never be hit exactly; a department 0.1 points
+ * under target is compliant in substance.
+ */
+export const MATERIAL_GAP_PP = 0.5;
+
+const saudizationRows: SaudizationRow[] = DEPARTMENTS.map((dept) => {
+  const rows = employees.filter((e) => e.department === dept.name);
+  const saudis = rows.filter((e) => e.isSaudi).length;
+  const percent = round((saudis / rows.length) * 100, 1);
+  return {
+    name: dept.name,
+    nameAr: dept.nameAr,
+    total: rows.length,
+    saudis,
+    expats: rows.length - saudis,
+    percent,
+    target: round(dept.saudizationTarget * 100, 1),
+    gap: round(percent - dept.saudizationTarget * 100, 1),
+    // A fraction of a person short is still one hire short. Reports as a
+    // headcount because that is the thing a recruiter can act on.
+    needed: Math.max(0, Math.ceil(dept.saudizationTarget * rows.length) - saudis),
+  };
+});
+
+const totalSaudis = employees.filter((e) => e.isSaudi).length;
+
+export const saudization = {
+  percent: round((totalSaudis / employees.length) * 100, 1),
+  saudis: totalSaudis,
+  expats: employees.length - totalSaudis,
+  band: nitaqatBand((totalSaudis / employees.length) * 100).band,
+  bandTone: nitaqatBand((totalSaudis / employees.length) * 100).tone,
+  /** Percent needed to reach the next band up, or null at Platinum. */
+  toNextBand: (() => {
+    const percent = (totalSaudis / employees.length) * 100;
+    const bands = [40, 35, 30, 25, 15];
+    const next = bands.filter((b) => b > percent).sort((a, b) => a - b)[0];
+    return next === undefined ? null : { band: nitaqatBand(next + 0.1).band, percent: round(next - percent, 1), headcount: Math.ceil(((next / 100) * employees.length - totalSaudis)) };
   })(),
-  /** Headcount-weighted: the average of individual ratios, not of averages. */
-  compaRatio: round(mean(activeEmployees.map((e) => e.compaRatio)) * 100, 1),
-  /** Annualised payroll budget across departments. */
-  budget: DEPARTMENTS.reduce((sum, d) => sum + d.budget, 0),
-  /** Annualised payroll cost of everyone currently on the books. */
-  actual: activeEmployees.reduce((sum, e) => sum + e.salary, 0),
+  byDepartment: saudizationRows,
+  /**
+   * Departments materially short of their own Saudization target — the action
+   * list. Gated on `MATERIAL_GAP_PP` rather than on `needed > 0`: because
+   * headcount is discrete, a department sitting 0.05 points under its target
+   * arithmetically "needs" one hire, which is a rounding artefact, not a finding.
+   */
+  belowTarget: saudizationRows
+    .filter((row) => row.gap <= -MATERIAL_GAP_PP)
+    .sort((a, b) => a.gap - b.gap),
+  /** Saudi hires needed to close the gaps above. Counts the material ones only. */
+  totalHiresNeeded: saudizationRows
+    .filter((row) => row.gap <= -MATERIAL_GAP_PP)
+    .reduce((s, row) => s + row.needed, 0),
+  byCity: CITY_HEADCOUNTS.map(({ city }) => {
+    const rows = employees.filter((e) => e.city === city);
+    const saudis = rows.filter((e) => e.isSaudi).length;
+    return { city, total: rows.length, saudis, percent: round((saudis / rows.length) * 100, 1) };
+  }),
+  /** Saudization among leavers, which is how a rate can drift without hiring anyone. */
+  leaverPercent: round((leavers.filter((e) => e.isSaudi).length / Math.max(1, leavers.length)) * 100, 1),
+  newHirePercent: round((newHires.filter((e) => e.isSaudi).length / Math.max(1, newHires.length)) * 100, 1),
 };
 
+/** Nationality mix behind the Saudization figure. */
+export const nationalityMix = (() => {
+  const counts = new Map<string, { count: number; nationalityAr: string }>();
+  for (const employee of employees) {
+    const entry = counts.get(employee.nationality) ?? { count: 0, nationalityAr: employee.nationalityAr };
+    entry.count += 1;
+    counts.set(employee.nationality, entry);
+  }
+  return [...counts.entries()]
+    .map(([nationality, { count, nationalityAr }]) => ({
+      nationality,
+      nationalityAr,
+      count,
+      percent: round((count / employees.length) * 100, 1),
+    }))
+    .sort((a, b) => b.count - a.count);
+})();
+
 // ---------------------------------------------------------------------------
-// Attendance and leave
+// GOSI
 // ---------------------------------------------------------------------------
 
-export const attendance = {
-  rate: round(mean(activeEmployees.map((e) => e.attendance)), 1),
-  /** Share of the workforce at or above a 90% attendance line. */
-  aboveThreshold: round(
-    (activeEmployees.filter((e) => e.attendance >= 90).length / activeEmployees.length) * 100,
+/**
+ * Contributions are charged on the contributory wage — basic pay plus the
+ * housing allowance, capped at the ceiling GOSI publishes. Saudis are insured
+ * for annuities and SANED; expatriates for occupational hazards only.
+ */
+function contributoryWage(employee: Employee): number {
+  return Math.min(employee.basicSalary + employee.housingAllowance, GOSI.contributoryWageCeiling);
+}
+
+export const gosi = (() => {
+  const insured = employees.filter((e) => e.gosiRegistered);
+  const saudiInsured = insured.filter((e) => e.isSaudi);
+  const expatInsured = insured.filter((e) => !e.isSaudi);
+
+  const employerSaudi = sum(saudiInsured.map((e) => (contributoryWage(e) * GOSI.saudi.employer) / 100));
+  const employerExpat = sum(expatInsured.map((e) => (contributoryWage(e) * GOSI.expat.employer) / 100));
+  const employeeSaudi = sum(saudiInsured.map((e) => (contributoryWage(e) * GOSI.saudi.employee) / 100));
+  const employeeExpat = sum(expatInsured.map((e) => (contributoryWage(e) * GOSI.expat.employee) / 100));
+
+  const employerMonthly = employerSaudi + employerExpat;
+  const employeeMonthly = employeeSaudi + employeeExpat;
+
+  return {
+    rates: GOSI,
+    insuredCount: insured.length,
+    uninsuredCount: employees.length - insured.length,
+    employerMonthly: Math.round(employerMonthly),
+    employeeMonthly: Math.round(employeeMonthly),
+    totalMonthly: Math.round(employerMonthly + employeeMonthly),
+    employerAnnual: Math.round(employerMonthly * 12),
+    totalAnnual: Math.round((employerMonthly + employeeMonthly) * 12),
+    /** The employer's share as a percentage of gross payroll. */
+    employerShareOfPayroll: round((employerMonthly / sum(insured.map((e) => e.monthlyGross))) * 100, 2),
+    breakdown: [
+      { group: 'Saudi — employer', rate: GOSI.saudi.employer, base: sum(saudiInsured.map(contributoryWage)), amount: Math.round(employerSaudi) },
+      { group: 'Saudi — employee', rate: GOSI.saudi.employee, base: sum(saudiInsured.map(contributoryWage)), amount: Math.round(employeeSaudi) },
+      { group: 'Expatriate — employer', rate: GOSI.expat.employer, base: sum(expatInsured.map(contributoryWage)), amount: Math.round(employerExpat) },
+      { group: 'Expatriate — employee', rate: GOSI.expat.employee, base: sum(expatInsured.map(contributoryWage)), amount: Math.round(employeeExpat) },
+    ],
+  };
+})();
+
+// ---------------------------------------------------------------------------
+// Expatriate levy and documents
+// ---------------------------------------------------------------------------
+
+export const expatCosts = {
+  /** The levy steps down once Saudis are at least as numerous as expatriates. */
+  saudisOutnumberExpats: totalSaudis >= employees.length - totalSaudis,
+  annualLevyPerExpat: totalSaudis >= employees.length - totalSaudis
+    ? COMPLIANCE.expatLevy.saudisOutnumberExpats
+    : COMPLIANCE.expatLevy.expatsOutnumberSaudis,
+  expatCount: employees.length - totalSaudis,
+  get annualLevyTotal(): number {
+    return this.annualLevyPerExpat * this.expatCount;
+  },
+};
+
+export interface DocumentAlert {
+  employee: Employee;
+  document: 'Iqama' | 'Passport' | 'Work permit';
+  expiry: string;
+  /** Gregorian expiry, display-ready, e.g. `18 Aug 2026`. */
+  expiryLabel: string;
+  /** The same date in the Umm al-Qura calendar, e.g. `5 Rabiʻ I 1448 AH`. */
+  expiryHijri: string;
+  daysRemaining: number;
+  status: 'expired' | 'critical' | 'warning';
+}
+
+/**
+ * Documents that need action, worst first. An expired iqama is not a paperwork
+ * problem — it is an illegal employment situation, so it sorts above everything.
+ */
+export const documentAlerts: DocumentAlert[] = (() => {
+  const alerts: DocumentAlert[] = [];
+  const today = AS_OF_DATE.getTime();
+
+  for (const employee of employees) {
+    if (employee.status === 'Inactive') continue;
+
+    const check = (document: DocumentAlert['document'], expiry: string | null) => {
+      if (!expiry) return;
+      const daysRemaining = Math.round((new Date(expiry).getTime() - today) / 86_400_000);
+      if (daysRemaining > COMPLIANCE.documentWarningDays) return;
+      const date = new Date(expiry);
+      alerts.push({
+        employee,
+        document,
+        expiry,
+        expiryLabel: formatGregorian(date),
+        expiryHijri: toHijri(date),
+        daysRemaining,
+        status: daysRemaining < 0 ? 'expired' : daysRemaining <= 30 ? 'critical' : 'warning',
+      });
+    };
+
+    check('Iqama', employee.iqamaExpiry);
+    check('Work permit', employee.workPermitExpiry);
+    check('Passport', employee.passportExpiry);
+  }
+
+  return alerts.sort((a, b) => a.daysRemaining - b.daysRemaining);
+})();
+
+export const documents = {
+  /** Everything inside the warning window — the working queue. */
+  expiringCount: documentAlerts.length,
+  expiredCount: documentAlerts.filter((a) => a.status === 'expired').length,
+  criticalCount: documentAlerts.filter((a) => a.status === 'critical').length,
+  /** Expired or due within 30 days: the items that need action this month. */
+  actionableCount: documentAlerts.filter((a) => a.status !== 'warning').length,
+  byType: (['Iqama', 'Passport', 'Work permit'] as const).map((type) => ({
+    type,
+    count: documentAlerts.filter((a) => a.document === type).length,
+    expired: documentAlerts.filter((a) => a.document === type && a.status === 'expired').length,
+  })),
+  /** Share of expatriate documents currently valid. */
+  complianceRate: round(
+    ((employees.filter((e) => !e.isSaudi).length * 3 - documentAlerts.filter((a) => a.status === 'expired').length) /
+      Math.max(1, employees.filter((e) => !e.isSaudi).length * 3)) *
+      100,
     1,
   ),
 };
 
-export const leave = {
-  /**
-   * Unused *annual* leave across current staff — the figure that is a real
-   * balance-sheet liability. Sick, personal and parental days are excluded here
-   * and reported per type in the leave panel: parental is granted per event, and
-   * counting an entitlement for everyone would invent ~23,000 phantom days.
-   */
-  totalRemaining: activeEmployees.reduce((sum, e) => sum + e.leave.annual.remaining, 0),
-  averageRemaining: round(mean(activeEmployees.map((e) => e.leave.annual.remaining)), 1),
-  /** The accruing types only, for the liability line. */
-  accruingRemaining: activeEmployees.reduce(
-    (sum, e) => sum + e.leave.annual.remaining + e.leave.sick.remaining + e.leave.personal.remaining,
-    0,
+// ---------------------------------------------------------------------------
+// End-of-service benefit
+// ---------------------------------------------------------------------------
+
+export const endOfService = {
+  /** Accrued liability across current staff, on the Art. 84 formula. */
+  accrued: Math.round(sum(activeEmployees.map((e) => e.endOfServiceAccrual))),
+  averagePerEmployee: Math.round(mean(activeEmployees.map((e) => e.endOfServiceAccrual))),
+  /** What the same population would cost if everyone left today with full entitlement. */
+  fullTerminationExposure: Math.round(
+    sum(
+      activeEmployees.map((e) => {
+        const years = tenureYears(e);
+        const firstFive = Math.min(years, 5);
+        const beyond = Math.max(0, years - 5);
+        return (firstFive * 0.5 + beyond) * e.monthlyGross;
+      }),
+    ),
   ),
-  byType: LEAVE_TYPES.map((type) => ({
-    type: type.label,
-    used: activeEmployees.reduce((sum, e) => sum + e.leave[type.key].used, 0),
-    remaining: activeEmployees.reduce((sum, e) => sum + e.leave[type.key].remaining, 0),
-  })),
+  /** Staff past five years, where the accrual rate doubles. */
+  overFiveYears: activeEmployees.filter((e) => tenureYears(e) >= 5).length,
+  /** Settlements actually paid to people who left during the period. */
+  settledThisPeriod: Math.round(
+    sum(
+      leavers.map((e) => {
+        const years = tenureYears(e);
+        const firstFive = Math.min(years, 5);
+        const beyond = Math.max(0, years - 5);
+        const gross = (firstFive * 0.5 + beyond) * e.monthlyGross;
+        if (e.exitType === 'voluntary') {
+          if (years < 2) return 0;
+          if (years < 5) return gross / 3;
+          if (years < 10) return (gross * 2) / 3;
+        }
+        return gross;
+      }),
+    ),
+  ),
 };
 
 // ---------------------------------------------------------------------------
-// Engagement
+// Payroll and WPS
 // ---------------------------------------------------------------------------
+
+export const pay = {
+  /** Mean monthly gross across current staff, SAR. */
+  averageMonthly: Math.round(mean(activeEmployees.map((e) => e.monthlyGross))),
+  medianMonthly: (() => {
+    const sorted = activeEmployees.map((e) => e.monthlyGross).sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 ? sorted[mid] : Math.round((sorted[mid - 1] + sorted[mid]) / 2);
+  })(),
+  averageBasic: Math.round(mean(activeEmployees.map((e) => e.basicSalary))),
+  monthlyPayroll: Math.round(sum(activeEmployees.map((e) => e.monthlyGross))),
+  get annualPayroll(): number {
+    return this.monthlyPayroll * 12;
+  },
+  compaRatio: round(mean(activeEmployees.map((e) => e.compaRatio)) * 100, 1),
+  budget: sum(DEPARTMENTS.map((d) => d.budget)),
+  /** Most recent month's payroll, as a single-cycle figure. */
+  lastPayrollRun: Math.round(sum(activeEmployees.map((e) => e.monthlyGross))),
+};
+
+export interface PayrollRun {
+  month: string;
+  key: string;
+  employees: number;
+  amount: number;
+  status: 'On time' | 'Late' | 'Pending';
+  /** Days after the statutory deadline, when late. */
+  daysLate: number;
+  wpsFile: 'Accepted' | 'Rejected' | 'Not submitted';
+}
+
+/**
+ * Monthly payroll cycles. WPS requires wages to reach the employee's Saudi bank
+ * account by the agreed date; a run that misses it is a compliance event, not
+ * an accounting inconvenience, so lateness is recorded rather than smoothed.
+ */
+export const payrollRuns: PayrollRun[] = (() => {
+  const random: Random = createRandom(20240520);
+  const last = reportingMonths.length - 1;
+
+  // Months are indexed from the oldest. The pattern is fixed rather than random
+  // so the compliance exceptions a reviewer sees are the same every time.
+  // Two single events across the year, both closed, and a clean run since: a
+  // late cycle inside the tolerated delay, and one file the bank rejected
+  // (a mismatched IBAN, in practice) that was corrected and resubmitted.
+  const exceptions: Record<number, { daysLate: number; wpsFile: PayrollRun['wpsFile'] }> = {
+    4: { daysLate: 3, wpsFile: 'Accepted' },
+    7: { daysLate: 0, wpsFile: 'Rejected' },
+  };
+
+  return reportingMonths.map((month, index) => {
+    const exception = exceptions[index];
+    const pending = index === last;
+
+    return {
+      month: month.label,
+      key: month.key,
+      employees: activeEmployees.length,
+      amount: Math.round(sum(activeEmployees.map((e) => e.monthlyGross)) * (1 + (random() - 0.5) * 0.01)),
+      status: pending ? 'Pending' : (exception?.daysLate ?? 0) > 0 ? 'Late' : 'On time',
+      daysLate: exception?.daysLate ?? 0,
+      wpsFile: pending ? 'Not submitted' : exception?.wpsFile ?? 'Accepted',
+    };
+  });
+})();
+
+export const wps = {
+  runs: payrollRuns.length,
+  onTime: payrollRuns.filter((r) => r.status === 'On time').length,
+  late: payrollRuns.filter((r) => r.status === 'Late').length,
+  pending: payrollRuns.filter((r) => r.status === 'Pending').length,
+  /**
+   * Runs where wages reached employees on time. The current month is still
+   * open, so it is excluded from the rate rather than counted as a failure —
+   * scoring an in-flight payroll would understate compliance every month.
+   */
+  complianceRate: round(
+    (payrollRuns.filter((r) => r.status === 'On time').length /
+      Math.max(1, payrollRuns.filter((r) => r.status !== 'Pending').length)) *
+      100,
+    1,
+  ),
+  /**
+   * Reportable exceptions, not merely late runs: either the tolerated delay was
+   * exceeded, or the WPS file itself was refused. A refused file is a compliance
+   * event even when the money later arrives, because the obligation is to pay
+   * *through* the system.
+   */
+  violations: payrollRuns.filter(
+    (r) =>
+      r.wpsFile === 'Rejected' ||
+      (r.status === 'Late' && r.daysLate > COMPLIANCE.wps.allowedDelayDays),
+  ),
+  filesAccepted: payrollRuns.filter((r) => r.wpsFile === 'Accepted').length,
+  filesRejected: payrollRuns.filter((r) => r.wpsFile === 'Rejected').length,
+  deadlineDay: COMPLIANCE.wps.requiredPaymentDay,
+  allowedDelayDays: COMPLIANCE.wps.allowedDelayDays,
+};
+
+// ---------------------------------------------------------------------------
+// Attendance, leave and engagement
+// ---------------------------------------------------------------------------
+
+export const attendance = {
+  rate: round(mean(activeEmployees.map((e) => e.attendance)), 1),
+  aboveThreshold: round((activeEmployees.filter((e) => e.attendance >= 90).length / activeEmployees.length) * 100, 1),
+};
+
+function leave_tier30_count(): boolean {
+  return activeEmployees.filter((e) => annualLeaveEntitlement(e) === 30).length > 0;
+}
+
+export const leave = {
+  /** Unused annual leave across current staff — the balance-sheet liability. */
+  totalRemaining: sum(activeEmployees.map((e) => e.leave.annual.remaining ?? 0)),
+  averageRemaining: round(mean(activeEmployees.map((e) => e.leave.annual.remaining ?? 0)), 1),
+  byType: LEAVE_TYPES.map((type) => ({
+    type: type.label,
+    typeAr: type.labelAr,
+    used: sum(activeEmployees.map((e) => e.leave[type.key].used)),
+    // Null where the type is a per-year grant rather than an accruing balance.
+    remaining: type.key === 'annual' || type.key === 'personal'
+      ? sum(activeEmployees.map((e) => e.leave[type.key].remaining ?? 0))
+      : null,
+    entitlement: type.key === 'annual'
+      ? (leave_tier30_count() ? LABOUR_LAW.annualLeave.fiveYearsAndOver : LABOUR_LAW.annualLeave.underFiveYears)
+      : type.entitlement,
+  })),
+  /** Split by the statutory entitlement, since the two tiers behave differently. */
+  tier21: activeEmployees.filter((e) => annualLeaveEntitlement(e) === LABOUR_LAW.annualLeave.underFiveYears).length,
+  tier30: activeEmployees.filter((e) => annualLeaveEntitlement(e) === LABOUR_LAW.annualLeave.fiveYearsAndOver).length,
+  onLeaveToday: activeEmployees.filter((e) => e.status === 'On Leave').length,
+};
 
 export const engagement = {
   average: round(mean(activeEmployees.map((e) => e.engagement)), 1),
   promoters: activeEmployees.filter((e) => e.engagement >= 9).length,
   passives: activeEmployees.filter((e) => e.engagement >= 7 && e.engagement < 9).length,
   detractors: activeEmployees.filter((e) => e.engagement < 7).length,
-  /**
-   * eNPS = %promoters − %detractors, on 0-10 scores. Positive is good; above 30
-   * is the commonly cited "excellent" line.
-   */
   get eNPS(): number {
     const n = activeEmployees.length;
     return Math.round(((this.promoters - this.detractors) / n) * 100);
   },
-  get participation(): number {
-    // Everyone in this population has responded, which is itself unusual; the
-    // figure is here so the tile can state it rather than imply it.
-    return 100;
-  },
 };
 
 // ---------------------------------------------------------------------------
-// Recruiting funnel
+// Recruitment
 // ---------------------------------------------------------------------------
 
 export interface Requisition {
   id: string;
-  department: Department;
+  department: string;
+  city: string;
   openedDate: string;
   filledDate: string | null;
   daysOpen: number;
   offersExtended: number;
   offersAccepted: number;
+  /** Whether the seat had to be advertised as Saudization-eligible. */
+  saudizationPriority: boolean;
 }
 
-/**
- * One requisition per hire in the window, plus a few still open. Each carries
- * the offers it took to fill the seat, which is what makes offer-acceptance a
- * derived figure rather than a stated one.
- */
 export const requisitions: Requisition[] = (() => {
-  // Its own generator: changing the recruiting model must not reshuffle the
-  // employee population (and vice versa).
   const random: Random = createRandom(20240401);
   const rows: Requisition[] = [];
-
-  const byDepartment = new Map<Department, Employee[]>();
-  for (const employee of newHires) {
-    const list = byDepartment.get(employee.department) ?? [];
-    list.push(employee);
-    byDepartment.set(employee.department, list);
-  }
-
   let index = 0;
-  for (const dept of DEPARTMENTS) {
-    for (const hire of byDepartment.get(dept.name) ?? []) {
-      // Filled roles: time-to-fill is the gap between opening and the hire.
-      const daysOpen = Math.max(7, Math.round(randNormal(random, dept.daysToFill, dept.daysToFill * 0.28)));
-      const filled = new Date(hire.joinDate);
-      const opened = new Date(filled.getTime() - daysOpen * 86_400_000);
 
-      // Most seats are filled by the first-choice candidate; some take two or
-      // three offers because the first was declined.
-      const roll = random();
-      const offersExtended = roll < 0.86 ? 1 : roll < 0.97 ? 2 : 3;
-      const offersAccepted = 1;
+  for (const hire of newHires) {
+    const dept = DEPARTMENTS.find((d) => d.name === hire.department)!;
+    const daysOpen = Math.max(7, Math.round(randNormal(random, dept.daysToFill, dept.daysToFill * 0.28)));
+    const filled = new Date(hire.joinDate);
+    const opened = new Date(filled.getTime() - daysOpen * 86_400_000);
 
-      rows.push({
-        id: `REQ-${String(++index).padStart(4, '0')}`,
-        department: dept.name,
-        openedDate: opened.toISOString().slice(0, 10),
-        filledDate: hire.joinDate,
-        daysOpen,
-        offersExtended,
-        offersAccepted,
-      });
-    }
+    const roll = random();
+    rows.push({
+      id: `REQ-${String(++index).padStart(4, '0')}`,
+      department: hire.department,
+      city: hire.city,
+      openedDate: opened.toISOString().slice(0, 10),
+      filledDate: hire.joinDate,
+      daysOpen,
+      offersExtended: roll < 0.86 ? 1 : roll < 0.97 ? 2 : 3,
+      offersAccepted: 1,
+      // Departments behind on Saudization must advertise accordingly.
+      saudizationPriority: dept.saudization > 0.4,
+    });
   }
-
   return rows;
 })();
 
 export const recruiting = {
-  /** Mean days from requisition open to accepted offer, weighted by role. */
   timeToFill: round(mean(requisitions.map((r) => r.daysOpen)), 1),
-  openRequisitions: DEPARTMENTS.reduce((sum, d) => sum + Math.round(d.headcount * 0.012), 0),
+  openRequisitions: sum(DEPARTMENTS.map((d) => Math.round(d.headcount * 0.012))),
   offerAcceptance: round(
-    (requisitions.reduce((sum, r) => sum + r.offersAccepted, 0) /
-      requisitions.reduce((sum, r) => sum + r.offersExtended, 0)) *
-      100,
+    (sum(requisitions.map((r) => r.offersAccepted)) / sum(requisitions.map((r) => r.offersExtended))) * 100,
     1,
   ),
-  /** First-year attrition is a different problem from attrition overall. */
   firstYearAttrition: round(
-    (leavers.filter((e) => daysEmployed(e) < 365).length / Math.max(1, newHires.length)) * 100,
+    (leavers.filter((e) => tenureYears(e) < 1).length / Math.max(1, newHires.length)) * 100,
+    1,
+  ),
+  /** Time to fill where the role was Saudization-priority. */
+  timeToFillSaudized: round(
+    mean(requisitions.filter((r) => r.saudizationPriority).map((r) => r.daysOpen)),
     1,
   ),
 };
 
-function daysEmployed(employee: Employee): number {
-  const start = new Date(employee.joinDate);
-  const end = employee.exitDate ? new Date(employee.exitDate) : AS_OF_DATE;
-  return Math.round((end.getTime() - start.getTime()) / 86_400_000);
-}
+// ---------------------------------------------------------------------------
+// Prayer times and the working day
+// ---------------------------------------------------------------------------
+
+export const prayerSchedule = CITIES.map((city) => ({
+  city: city.city,
+  cityAr: city.cityAr,
+  region: city.region,
+  times: prayerTimes(AS_OF_DATE, city.latitude, city.longitude),
+}));
 
 // ---------------------------------------------------------------------------
-// The KPI strips
+// KPI strips
 // ---------------------------------------------------------------------------
 
 /**
- * The executive strip: the five questions a CHRO actually asks. Ordered by
- * decision value, not by how easy they are to compute.
+ * The executive strip. Saudization leads because in a Saudi establishment it is
+ * the metric with regulatory consequences, not merely a workforce statistic.
  */
 export const executiveMetrics: MetricDefinition[] = [
   {
+    id: 'saudization',
+    label: 'Saudization',
+    labelAr: 'نسبة السعودة',
+    value: saudization.percent,
+    unit: 'percent',
+    target: 40,
+    cadence: 'monthly',
+    hint: `Saudi nationals as a share of the workforce — the input to the Nitaqat band (currently ${saudization.band}). Reported to MHRSD and reviewed continuously.`,
+  },
+  {
+    id: 'wpsCompliance',
+    label: 'WPS Compliance',
+    labelAr: 'التزام حماية الأجور',
+    value: wps.complianceRate,
+    unit: 'percent',
+    target: 100,
+    cadence: 'monthly',
+    hint: `Payroll cycles where wages reached employees by the agreed date, per the Wage Protection System. ${wps.late} late and ${wps.pending} still open of ${wps.runs} runs; a delay beyond ${wps.allowedDelayDays} days is a reportable violation.`,
+  },
+  {
     id: 'turnover',
     label: 'Annual Turnover',
+    labelAr: 'معدل الدوران السنوي',
     value: turnover.value,
     unit: 'percent',
     target: 10,
     inverse: true,
     cadence: 'monthly',
-    hint: 'Leavers over the period ÷ average headcount. Voluntary and involuntary combined.',
+    hint: `Leavers over the period ÷ average headcount. Saudi ${turnover.saudiRate}%, expatriate ${turnover.expatRate}% — the two move for different reasons.`,
   },
   {
     id: 'timeToFill',
     label: 'Time to Fill',
+    labelAr: 'مدة إشغال الوظيفة',
     value: recruiting.timeToFill,
     unit: 'days',
     target: 40,
@@ -291,26 +673,9 @@ export const executiveMetrics: MetricDefinition[] = [
     hint: 'Days from requisition approval to accepted offer, averaged across filled roles.',
   },
   {
-    id: 'offerAcceptance',
-    label: 'Offer Acceptance',
-    value: recruiting.offerAcceptance,
-    unit: 'percent',
-    target: 90,
-    cadence: 'monthly',
-    hint: 'Offers accepted ÷ offers extended. Below 85% usually means pay or speed is losing candidates.',
-  },
-  {
-    id: 'compaRatio',
-    label: 'Compa-Ratio',
-    value: pay.compaRatio,
-    unit: 'percent',
-    target: 100,
-    cadence: 'quarterly',
-    hint: 'Average pay as a share of the midpoint for each role. 100% is paid at market.',
-  },
-  {
     id: 'eNPS',
     label: 'eNPS',
+    labelAr: 'مؤشر رضا الموظفين',
     value: engagement.eNPS,
     unit: 'score',
     target: 30,
@@ -319,82 +684,89 @@ export const executiveMetrics: MetricDefinition[] = [
   },
 ];
 
-/** The detail strip: the operational snapshot behind the five above. */
+/** The operational snapshot behind the five above. */
 export const operationalMetrics: MetricDefinition[] = [
   {
     id: 'totalEmployees',
     label: 'Total Employees',
+    labelAr: 'إجمالي الموظفين',
     value: headcount.total,
     unit: 'count',
     target: null,
     cadence: 'monthly',
-    hint: 'Everyone on the books, including those who have since left within the period.',
+    hint: 'Everyone on the books, including those who left during the period.',
   },
   {
-    id: 'activeEmployees',
-    label: 'Active Employees',
-    value: headcount.active,
+    id: 'saudiEmployees',
+    label: 'Saudi Nationals',
+    labelAr: 'الموظفون السعوديون',
+    value: saudization.saudis,
     unit: 'count',
     target: null,
     cadence: 'monthly',
-    hint: 'Currently working, excluding those on leave and those who have left.',
+    hint: 'Saudi nationals on the books. Expressed as a share in the Saudization metric above.',
+  },
+  {
+    id: 'expatEmployees',
+    label: 'Expatriates',
+    labelAr: 'المقيمون',
+    value: saudization.expats,
+    unit: 'count',
+    target: null,
+    cadence: 'monthly',
+    hint: `Non-Saudi staff. Each carries a work-permit levy of SAR ${expatCosts.annualLevyPerExpat.toLocaleString()} a year.`,
   },
   {
     id: 'newHires',
     label: 'New Hires',
+    labelAr: 'التعيينات الجديدة',
     value: newHires.length,
     unit: 'count',
     target: null,
     cadence: 'monthly',
-    hint: 'Joiners during the trailing twelve months.',
-  },
-  {
-    id: 'attritionVoluntary',
-    label: 'Voluntary Exits',
-    value: turnover.voluntary,
-    unit: 'count',
-    target: null,
-    inverse: true,
-    cadence: 'monthly',
-    hint: 'People who chose to leave. The involuntary figure is excluded deliberately — it is a different problem.',
+    hint: `Joiners in the period, of whom ${saudization.newHirePercent}% are Saudi nationals.`,
   },
   {
     id: 'avgSalary',
     label: 'Average Salary',
-    value: pay.average,
-    unit: 'currency',
+    labelAr: 'متوسط الراتب',
+    value: pay.averageMonthly,
+    unit: 'currencyMonthly',
     target: null,
     cadence: 'quarterly',
-    hint: 'Mean annual salary across current staff. The median is a healthier measure; both are shown in the pay panel.',
+    hint: 'Mean monthly gross, including housing and transport allowances. The median is shown in the payroll panel.',
   },
   {
     id: 'attendanceRate',
     label: 'Attendance Rate',
+    labelAr: 'معدل الحضور',
     value: attendance.rate,
     unit: 'percent',
     target: 95,
     cadence: 'weekly',
-    hint: 'Mean share of working days attended across current staff.',
+    hint: 'Mean share of working days attended. The Saudi working week runs Sunday to Thursday.',
   },
   {
     id: 'leaveBalance',
     label: 'Leave Liability',
+    labelAr: 'رصيد الإجازات',
     value: leave.totalRemaining,
     unit: 'days',
     target: null,
     inverse: true,
     cadence: 'monthly',
-    hint: 'Unused annual leave days across current staff. A rising balance is a liability on the books.',
+    hint: 'Unused annual leave days across current staff — a balance-sheet liability. 21 days under five years of service, 30 at five and above (Art. 109).',
   },
   {
-    id: 'firstYearAttrition',
-    label: 'First-Year Attrition',
-    value: recruiting.firstYearAttrition,
-    unit: 'percent',
-    target: 15,
+    id: 'documentsExpiring',
+    label: 'Documents Expiring',
+    labelAr: 'مستندات قاربت الانتهاء',
+    value: documents.actionableCount,
+    unit: 'count',
+    target: 0,
     inverse: true,
-    cadence: 'monthly',
-    hint: 'Leavers within twelve months of joining, as a share of that year\'s hires. A recruiting-quality signal.',
+    cadence: 'weekly',
+    hint: `${documents.expiredCount} already expired and ${documents.criticalCount} due within 30 days. Behind them, ${documents.expiringCount} documents sit inside the 90-day warning window.`,
   },
 ];
 
@@ -407,21 +779,21 @@ export const departmentBreakdown = DEPARTMENTS.map((dept) => {
   const active = rows.filter((e) => e.status !== 'Inactive');
   const deptLeavers = leavers.filter((e) => e.department === dept.name).length;
   const deptHires = newHires.filter((e) => e.department === dept.name).length;
-  // Same average-headcount formula as the org-wide turnover figure, so the
-  // department rows add up to the headline instead of using a quieter
-  // denominator and disagreeing with it.
   const opening = rows.length - deptHires + deptLeavers;
   const averageHeadcount = (opening + rows.length) / 2;
+  const saudis = rows.filter((e) => e.isSaudi).length;
 
   return {
     name: dept.name,
+    nameAr: dept.nameAr,
     count: rows.length,
     activeCount: active.length,
     budget: dept.budget,
-    avgSalary: Math.round(mean(active.map((e) => e.salary))),
+    avgSalary: Math.round(mean(active.map((e) => e.monthlyGross))),
     growth: dept.growth,
     turnoverRate: round((deptLeavers / Math.max(1, averageHeadcount)) * 100, 1),
     compaRatio: round(mean(active.map((e) => e.compaRatio)) * 100, 1),
+    saudization: round((saudis / rows.length) * 100, 1),
   };
 });
 
@@ -451,13 +823,14 @@ export const attritionByDepartment = DEPARTMENTS.map((dept) => {
   const rows = leavers.filter((e) => e.department === dept.name);
   return {
     department: dept.name,
+    departmentAr: dept.nameAr,
     voluntary: rows.filter((e) => e.exitType === 'voluntary').length,
     involuntary: rows.filter((e) => e.exitType === 'involuntary').length,
     activeCount: employees.filter((e) => e.department === dept.name && e.status !== 'Inactive').length,
   };
 });
 
-const GENDER_ORDER: Record<string, number> = { Male: 0, Female: 1, Other: 2 };
+const GENDER_ORDER: Record<string, number> = { Male: 0, Female: 1 };
 
 export const demographics = {
   gender: [...new Set(activeEmployees.map((e) => e.gender))]
@@ -472,31 +845,19 @@ export const demographics = {
     { range: '36-45', test: (age: number) => age >= 36 && age <= 45 },
     { range: '46-55', test: (age: number) => age >= 46 && age <= 55 },
     { range: '55+', test: (age: number) => age > 55 },
-  ].map((band) => ({
-    range: band.range,
-    count: activeEmployees.filter((e) => band.test(e.age)).length,
-  })),
+  ].map((band) => ({ range: band.range, count: activeEmployees.filter((e) => band.test(e.age)).length })),
   tenure: [
-    { range: '< 1 year', test: (days: number) => days < 365 },
-    { range: '1-3 years', test: (days: number) => days >= 365 && days < 1095 },
-    { range: '3-5 years', test: (days: number) => days >= 1095 && days < 1825 },
-    { range: '5-10 years', test: (days: number) => days >= 1825 && days < 3650 },
-    { range: '10+ years', test: (days: number) => days >= 3650 },
-  ].map((band) => ({
-    range: band.range,
-    count: activeEmployees.filter((e) => band.test(daysEmployed(e))).length,
-  })),
+    { range: '< 1 year', test: (years: number) => years < 1 },
+    { range: '1-3 years', test: (years: number) => years >= 1 && years < 3 },
+    { range: '3-5 years', test: (years: number) => years >= 3 && years < 5 },
+    { range: '5-10 years', test: (years: number) => years >= 5 && years < 10 },
+    { range: '10+ years', test: (years: number) => years >= 10 },
+  ].map((band) => ({ range: band.range, count: activeEmployees.filter((e) => band.test(tenureYears(e))).length })),
 };
 
 export const attendanceByMonth = reportingMonths.map((month) => {
-  // The month's slice of the population: everyone employed for any part of it.
-  const rows = activeEmployees.filter((e) => {
-    const joined = e.joinDate.slice(0, 7) <= month.key;
-    return joined;
-  });
+  const rows = activeEmployees.filter((e) => e.joinDate.slice(0, 7) <= month.key);
   const base = mean(rows.map((e) => e.attendance));
-  // Seasonal shape: winter illness and the mid-year holidays pull attendance
-  // down, spring and early summer push it up.
   const monthIndex = new Date(`${month.key}-01T00:00:00Z`).getUTCMonth();
   const wobble = [-0.9, -0.4, 0.6, 0.2, -0.7, 1.1, -0.2, 0.7, 0.1, 0.4, -0.3, -1.1][monthIndex];
   const present = Math.max(85, Math.min(99, round(base + wobble, 1)));
@@ -511,64 +872,50 @@ export const performanceDistribution = (() => {
   });
 })();
 
-export const locationBreakdown = LOCATIONS.map((loc) => ({
-  city: loc.city,
-  employees: employees.filter((e) => e.location === loc.city && e.status !== 'Inactive').length,
-  growth: loc.growth,
-  avgSalary: Math.round(mean(activeEmployees.filter((e) => e.location === loc.city).map((e) => e.salary))),
-}));
+export const locationBreakdown = CITY_HEADCOUNTS.map((entry) => {
+  const city = CITIES.find((c) => c.city === entry.city)!;
+  const rows = employees.filter((e) => e.city === entry.city);
+  const active = rows.filter((e) => e.status !== 'Inactive');
+  return {
+    city: entry.city,
+    cityAr: city.cityAr,
+    region: city.region,
+    employees: active.length,
+    total: rows.length,
+    growth: entry.growth,
+    avgSalary: Math.round(mean(active.map((e) => e.monthlyGross))),
+    saudization: round((rows.filter((e) => e.isSaudi).length / rows.length) * 100, 1),
+    siteType: city.siteType,
+  };
+});
 
 const SALARY_BANDS = [
-  { range: '<$50k', min: 0, max: 50000 },
-  { range: '$50k-$75k', min: 50000, max: 75000 },
-  { range: '$75k-$100k', min: 75000, max: 100000 },
-  { range: '$100k-$125k', min: 100000, max: 125000 },
-  { range: '$125k-$150k', min: 125000, max: 150000 },
-  { range: '>$150k', min: 150000, max: Infinity },
+  { range: '< 5k', min: 0, max: 5000 },
+  { range: '5k-10k', min: 5000, max: 10000 },
+  { range: '10k-15k', min: 10000, max: 15000 },
+  { range: '15k-20k', min: 15000, max: 20000 },
+  { range: '20k-30k', min: 20000, max: 30000 },
+  { range: '30k+', min: 30000, max: Infinity },
 ];
 
 export const salaryDistribution = SALARY_BANDS.map((band) => ({
   range: band.range,
-  count: activeEmployees.filter((e) => e.salary >= band.min && e.salary < band.max).length,
+  count: activeEmployees.filter((e) => e.monthlyGross >= band.min && e.monthlyGross < band.max).length,
 }));
 
-/**
- * The activity feed. Derived from the population like everything else: a hire
- * from a real join date, an exit from a real exit, a promotion from a real
- * promotion record, leave from whoever is actually on leave.
- */
 export const recentActivities = (() => {
-  const items: {
-    id: number;
-    type: 'hire' | 'exit' | 'promotion' | 'leave';
-    name: string;
-    department: string;
-    date: string;
-  }[] = [];
-
+  const items: { id: number; type: 'hire' | 'exit' | 'promotion' | 'leave'; name: string; nameAr: string; department: string; date: string }[] = [];
   const recentHires = [...newHires].sort((a, b) => b.joinDate.localeCompare(a.joinDate)).slice(0, 4);
   const recentExits = [...leavers].sort((a, b) => (b.exitDate ?? '').localeCompare(a.exitDate ?? '')).slice(0, 4);
-  const recentPromotions = activeEmployees
-    .filter((e) => e.lastPromotion)
-    .sort((a, b) => (b.lastPromotion ?? '').localeCompare(a.lastPromotion ?? ''))
-    .slice(0, 3);
+  const recentPromotions = activeEmployees.filter((e) => e.lastPromotion).sort((a, b) => (b.lastPromotion ?? '').localeCompare(a.lastPromotion ?? '')).slice(0, 3);
   const onLeave = activeEmployees.filter((e) => e.status === 'On Leave').slice(0, 3);
 
-  for (const e of recentHires) {
-    items.push({ id: 0, type: 'hire', name: e.name, department: e.department, date: e.joinDate });
-  }
-  for (const e of recentExits) {
-    items.push({ id: 0, type: 'exit', name: e.name, department: e.department, date: e.exitDate! });
-  }
-  for (const e of recentPromotions) {
-    items.push({ id: 0, type: 'promotion', name: e.name, department: e.department, date: e.lastPromotion! });
-  }
-  for (const e of onLeave) {
-    items.push({ id: 0, type: 'leave', name: e.name, department: e.department, date: e.joinDate });
-  }
+  for (const e of recentHires) items.push({ id: 0, type: 'hire', name: e.nameEn, nameAr: e.nameAr, department: e.department, date: e.joinDate });
+  for (const e of recentExits) items.push({ id: 0, type: 'exit', name: e.nameEn, nameAr: e.nameAr, department: e.department, date: e.exitDate! });
+  for (const e of recentPromotions) items.push({ id: 0, type: 'promotion', name: e.nameEn, nameAr: e.nameAr, department: e.department, date: e.lastPromotion! });
+  for (const e of onLeave) items.push({ id: 0, type: 'leave', name: e.nameEn, nameAr: e.nameAr, department: e.department, date: e.joinDate });
 
-  return items
-    .sort((a, b) => b.date.localeCompare(a.date))
-    .slice(0, 6)
-    .map((item, index) => ({ ...item, id: index + 1 }));
+  return items.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 6).map((item, index) => ({ ...item, id: index + 1 }));
 })();
+
+export type { NitaqatBand };

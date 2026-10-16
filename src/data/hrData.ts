@@ -12,7 +12,7 @@
  * rather than in a single risky rewrite. New code should import from
  * `./metrics` directly.
  */
-import { DEPARTMENTS, LOCATIONS, type Department, type Location } from './employees';
+import { CITY_HEADCOUNTS, DEPARTMENTS, type Department } from './employees';
 import {
   attritionByDepartment,
   attendanceByMonth,
@@ -36,7 +36,7 @@ import { categoricalColor } from './palette';
 export type { Employee } from './employees';
 
 export const departments: Department[] = DEPARTMENTS.map((d) => d.name);
-export const locations: Location[] = LOCATIONS.map((l) => l.city);
+export const locations: string[] = CITY_HEADCOUNTS.map((c) => c.city);
 export const months: string[] = reportingMonths.map((m) => m.label);
 
 /** Reads a derived operational metric by id, so the strip stays the definition. */
@@ -53,10 +53,14 @@ function metric(id: string): number {
  */
 export const kpiData = {
   totalEmployees: metric('totalEmployees'),
-  activeEmployees: metric('activeEmployees'),
+  // Read from headcount, not the metric strip: the strip reports the eight
+  // figures an HR analyst acts on, and "active employees" is a slice of
+  // headcount rather than one of them. Looking it up by id threw at module
+  // load and took the whole app down with it.
+  activeEmployees: headcount.active,
   newHires: newHires.length,
   attritionRate: turnover.value,
-  avgSalary: pay.average,
+  avgSalary: pay.averageMonthly,
   attendanceRate: metric('attendanceRate'),
   leaveBalance: derivedLeave.totalRemaining,
   departmentCount: headcount.departments,
