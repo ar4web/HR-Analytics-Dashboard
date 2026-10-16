@@ -3,8 +3,8 @@ import { motion } from 'framer-motion';
 import {
   Users, UserCheck, UserPlus, TrendingDown, DollarSign,
   Calendar, Clock, Building2, Download, Bell, Settings,
-  Search, ChevronDown, BarChart3, PieChart, Activity,
-  MapPin, Briefcase, Award, AlertCircle
+  Search, ChevronDown, BarChart3, Activity,
+  MapPin, Briefcase, Award, AlertCircle, Menu
 } from 'lucide-react';
 import { KPICard } from './components/KPICard';
 import { BarChart } from './components/BarChart';
@@ -12,6 +12,7 @@ import { DonutChart } from './components/DonutChart';
 import { LineChart } from './components/LineChart';
 import { StackedBarChart } from './components/StackedBarChart';
 import { FilterBar } from './components/FilterBar';
+import { Sidebar } from './components/Sidebar';
 import {
   kpiData, departmentBreakdown, hiringTrends, attritionData,
   demographicsData, attendanceData, performanceData, locationData,
@@ -26,6 +27,8 @@ export default function App() {
     gender: 'all',
     status: 'all',
   });
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const filters = [
     {
@@ -156,13 +159,39 @@ export default function App() {
   }));
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-emerald-50">
+    <div className={`min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-emerald-50 transition-[padding] duration-300 ${
+      sidebarCollapsed ? 'lg:pl-24' : 'lg:pl-[264px]'
+    }`}>
+      <Sidebar
+        collapsed={sidebarCollapsed}
+        onToggleCollapsed={() => setSidebarCollapsed(prev => !prev)}
+        mobileOpen={mobileNavOpen}
+        onCloseMobile={() => setMobileNavOpen(false)}
+      />
+
+      {/* Mobile scrim */}
+      {mobileNavOpen && (
+        <div
+          onClick={() => setMobileNavOpen(false)}
+          aria-hidden
+          className="fixed inset-0 z-[60] bg-gray-900/40 backdrop-blur-sm lg:hidden"
+        />
+      )}
+
       {/* Header */}
       <header className="bg-white/80 backdrop-blur-xl border-b border-gray-200 sticky top-0 z-40">
         <div className="max-w-[1600px] mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <div className="p-2 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl shadow-lg shadow-emerald-500/20">
+              <button
+                type="button"
+                onClick={() => setMobileNavOpen(true)}
+                aria-label="Open navigation"
+                className="p-2 -ml-1 hover:bg-gray-100 rounded-xl transition-colors lg:hidden"
+              >
+                <Menu className="w-5 h-5 text-gray-600" />
+              </button>
+              <div className="p-2 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl shadow-lg shadow-emerald-500/20 lg:hidden">
                 <BarChart3 className="w-6 h-6 text-white" />
               </div>
               <div>
@@ -192,7 +221,7 @@ export default function App() {
               </button>
               
               {/* Export Button */}
-              <button className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl text-sm font-medium hover:from-emerald-600 hover:to-emerald-700 transition-all shadow-lg shadow-emerald-500/20">
+              <button className="hidden sm:flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl text-sm font-medium hover:from-emerald-600 hover:to-emerald-700 transition-all shadow-lg shadow-emerald-500/20">
                 <Download className="w-4 h-4" />
                 Export Report
               </button>

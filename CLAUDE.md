@@ -57,10 +57,11 @@ index.html                 # Vite entry; also hosts two injected analytics <scri
 vite.config.ts             # react + tailwindcss plugins; sourceTags() is loaded optionally
 src/
   main.tsx                 # createRoot(...).render(<StrictMode><App /></StrictMode>)
-  App.tsx                  # the whole page: header, filters, KPIs, all chart sections, footer
+  App.tsx                  # app shell + the whole page: sidebar state, header, filters, KPIs, charts, footer
   index.css                # Tailwind v4 entry + global CSS
   data/hrData.ts           # Employee interface, domain constants, and every mock dataset
   components/
+    Sidebar.tsx            # app shell nav: icon rail / expanded / mobile drawer
     KPICard.tsx            # labelled stat + trend delta chip
     FilterBar.tsx          # dropdown filter row
     BarChart.tsx           # vertical + horizontal bar modes
@@ -84,10 +85,31 @@ exports (`export function BarChart(...)`), not defaults — `App.tsx` is the onl
 
 ### Page layout (order in `App.tsx`)
 
-Header (search / bell / settings / export / profile) → `FilterBar` → 8 KPI cards → Charts Row 1
-(Hiring Trends line, Department Distribution bar, Gender donut) → Charts Row 2 (Attrition stacked
-bar, Attendance line) → Charts Row 3 (Performance bar, Location bar, Age bar) → Bottom (Department
-Overview table, Recent Activity feed) → Leave Management cards → footer.
+`Sidebar` is `fixed` and the app root pads for it, so `App.tsx` renders: Sidebar (plus a mobile
+scrim) → Header (hamburger + brand on mobile, search / bell / settings / export / profile) →
+`FilterBar` → 8 KPI cards → Charts Row 1 (Hiring Trends line, Department Distribution bar, Gender
+donut) → Charts Row 2 (Attrition stacked bar, Attendance line) → Charts Row 3 (Performance bar,
+Location bar, Age bar) → Bottom (Department Overview table, Recent Activity feed) → Leave
+Management cards → footer.
+
+### Sidebar states
+
+`Sidebar` has three presentation states, driven by two `App` state values plus CSS breakpoints —
+no JS media queries:
+
+| State | Trigger | Width | Look |
+| --- | --- | --- | --- |
+| Mobile drawer | `mobileOpen` (hamburger) | 288px | always labelled, `fixed` overlay + scrim, close via `X` / scrim / nav click |
+| Expanded | default on ≥lg | 264px | labels, section headings, badges |
+| Icon rail | `collapsed` (round chevron handle) | 96px | icons only, labels/badges/headings collapse to zero width, hover tooltip per item |
+
+⚠️ **Keep two things in sync when changing the rail width:** the `lg:w-24` / `lg:w-[264px]` on the
+`<aside>` and the `lg:pl-24` / `lg:pl-[264px]` on the `App` root. Labels collapse via
+`lg:max-w-0 lg:opacity-0`, so they stay visible on mobile even while collapsed on desktop. Nav
+selection is local `useState` in `Sidebar`; the rail dimensions are *not* persisted across reloads.
+
+The mobile scrim is `z-[60]` and the sidebar `z-[70]`, both above the sticky header's `z-40` —
+keep that ordering if you add floating UI.
 
 ### Filters are currently decorative ⚠️
 
