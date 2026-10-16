@@ -3,11 +3,28 @@ import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 
 export type Tone = 'emerald' | 'sky' | 'indigo' | 'violet' | 'rose' | 'amber' | 'cyan' | 'slate';
 
+export interface CardTrend {
+  /**
+   * Whether this reading is good, bad or neither. Deliberately separate from
+   * the direction of the number: turnover below target is *good*, and colouring
+   * by "did the value go down" would paint it red.
+   */
+  status: 'good' | 'bad' | 'neutral';
+  /** Short text, e.g. "2.1 pts under target" or "+4 days". */
+  label: string;
+}
+
 interface KPICardProps {
   title: string;
   value: string | number;
+  /** Legacy percentage change. Prefer `trend`, which knows about direction. */
   change?: number;
   changeLabel?: string;
+  trend?: CardTrend;
+  /** Shown under the value as "Target: …". */
+  target?: string;
+  /** Tooltip text explaining what the number counts. */
+  hint?: string;
   icon: React.ReactNode;
   prefix?: string;
   suffix?: string;
@@ -25,6 +42,9 @@ export function KPICard({
   value,
   change,
   changeLabel,
+  trend,
+  target,
+  hint,
   icon,
   prefix = '',
   suffix = '',
@@ -40,6 +60,7 @@ export function KPICard({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.45, delay: index * 0.05, ease: [0.22, 1, 0.36, 1] }}
       className={`surface surface-lift hairline tone-${tone} group overflow-hidden pad-tile`}
+      title={hint}
     >
       {/* The icon is placed out of flow: at lg:grid-cols-8 a card is only ~180px
           wide, so an inline icon tile would squeeze the value into ~55px. */}
@@ -57,7 +78,26 @@ export function KPICard({
             {typeof value === 'number' ? value.toLocaleString() : value}
             {suffix}
           </p>
-          {change !== undefined && (
+          {trend && (
+            <div className="mt-3 flex flex-wrap items-center gap-x-1.5 gap-y-1">
+              <span
+                className={`chip ${
+                  trend.status === 'good'
+                    ? 'chip-positive'
+                    : trend.status === 'bad'
+                      ? 'chip-negative'
+                      : 'chip-neutral'
+                }`}
+              >
+                {trend.status === 'good' && <TrendingUp className="h-3 w-3" />}
+                {trend.status === 'bad' && <TrendingDown className="h-3 w-3" />}
+                {trend.status === 'neutral' && <Minus className="h-3 w-3" />}
+                {trend.label}
+              </span>
+            </div>
+          )}
+
+          {!trend && change !== undefined && (
             <div className="mt-3 flex flex-wrap items-center gap-x-1.5 gap-y-1">
               <span
                 className={`chip ${
@@ -75,6 +115,8 @@ export function KPICard({
               )}
             </div>
           )}
+
+          {target && <p className="mt-2 truncate text-[11px] text-subtle">{target}</p>}
         </div>
       </div>
     </motion.div>

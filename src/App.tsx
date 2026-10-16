@@ -7,7 +7,7 @@ import {
   MapPin, Briefcase, Award, AlertCircle, Menu, Sparkles
 } from 'lucide-react';
 import { KPICard } from './components/KPICard';
-import type { Tone } from './components/KPICard';
+import type { CardTrend, Tone } from './components/KPICard';
 import { BarChart } from './components/BarChart';
 import { DonutChart } from './components/DonutChart';
 import { LineChart } from './components/LineChart';
@@ -20,6 +20,8 @@ import {
   demographicsData, attendanceData, performanceData, locationData,
   leaveData, recentActivities, departments, locations
 } from './data/hrData';
+import { SERIES as SERIES_PALETTE } from './data/palette';
+import { executiveMetrics, operationalMetrics, reportingPeriod, type MetricDefinition } from './data/metrics';
 
 /* Colour + tone maps keep the department palette in one place instead of
    repeating a ternary chain per chart. */
@@ -34,11 +36,102 @@ const DEPT_TONES: Record<string, Tone> = {
 const deptColor = (name: string) => DEPT_COLORS[name] ?? '#10b981';
 const deptTone = (name: string): Tone => DEPT_TONES[name] ?? 'slate';
 
-/* Two-series line-chart colours. Blue + orange rather than green + red: the
-   green/red pairing collapses to near-identical browns under deuteranopia
-   (measured dE 19, vs 118 for this pair) and fails WCAG 1.4.1 'use of colour'.
-   Measured by scripts/verify-theme.py — re-run it before changing these. */
-const SERIES = { hires: '#0ea5e9', exits: '#f97316' };
+/* Presentation for the derived metric strips. Formatting lives here rather
+   than in the data layer because it is a display concern, and the trend status
+   is computed from the target so inverse metrics (turnover, time-to-fill) are
+   not painted red merely for being lower than last period. */
+const METRIC_ICONS: Record<string, React.ReactNode> = {
+  turnover: <TrendingDown className="w-5 h-5" />,
+  timeToFill: <Clock className="w-5 h-5" />,
+  offerAcceptance: <UserCheck className="w-5 h-5" />,
+  compaRatio: <DollarSign className="w-5 h-5" />,
+  eNPS: <Sparkles className="w-5 h-5" />,
+  totalEmployees: <Users className="w-5 h-5" />,
+  activeEmployees: <UserCheck className="w-5 h-5" />,
+  newHires: <UserPlus className="w-5 h-5" />,
+  attritionVoluntary: <AlertCircle className="w-5 h-5" />,
+  avgSalary: <DollarSign className="w-5 h-5" />,
+  attendanceRate: <Calendar className="w-5 h-5" />,
+  leaveBalance: <Clock className="w-5 h-5" />,
+  firstYearAttrition: <Activity className="w-5 h-5" />,
+};
+
+const METRIC_TONES: Record<string, Tone> = {
+  turnover: 'sky',
+  timeToFill: 'indigo',
+  offerAcceptance: 'violet',
+  compaRatio: 'emerald',
+  eNPS: 'amber',
+  totalEmployees: 'sky',
+  activeEmployees: 'emerald',
+  newHires: 'indigo',
+  attritionVoluntary: 'rose',
+  avgSalary: 'violet',
+  attendanceRate: 'cyan',
+  leaveBalance: 'amber',
+  firstYearAttrition: 'slate',
+};
+
+function formatMetricValue(metric: MetricDefinition): { display: string; prefix?: string; suffix?: string } {
+  switch (metric.unit) {
+    case 'percent':
+      return { display: metric.value.toFixed(1), suffix: '%' };
+    case 'currency':
+      // Abbreviated: a full dollar figure does not fit a card at this size.
+      return { display: `$${Math.round(metric.value / 1000)}k` };
+    case 'days':
+      // Two different meanings share this unit: a duration (time-to-fill, 39.4
+      // days) reads fine with a decimal, but a total day count (leave liability)
+      // does not — "12075.0 days" is noise.
+      return metric.value >= 100
+        ? { display: metric.value.toLocaleString(), suffix: ' days' }
+        : { display: metric.value.toFixed(1), suffix: 'd' };
+    case 'score':
+      return { display: metric.value.toFixed(0) };
+    default:
+      return { display: metric.value.toLocaleString() };
+  }
+}
+
+function formatTarget(metric: MetricDefinition): string | undefined {
+  if (metric.target === null) return undefined;
+  const unit = metric.unit === 'percent' ? '%' : metric.unit === 'days' ? ' days' : metric.unit === 'score' ? '' : '';
+  return `Target: ${metric.target}${unit}`;
+}
+
+/**
+ * Turns value-vs-target into a chip. A metric with no target gets a neutral
+ * chip stating the cadence instead, because a number with no comparison and no
+ * review rhythm is not a KPI.
+ */
+function metricTrend(metric: MetricDefinition): CardTrend {
+  if (metric.target === null) {
+    return { status: 'neutral', label: `${metric.cadence} review` };
+  }
+
+  const delta = metric.value - metric.target;
+  const better = metric.inverse ? delta < 0 : delta > 0;
+  // A reading within tolerance of target is neutral, not a win or a failure.
+  // The band scales with the target (1%) so a 0.3-point compa-ratio gap is not
+  // reported as a problem while a 1.8-point offer-acceptance gap still is.
+  const tolerance = Math.max(0.5, Math.abs(metric.target) * 0.01);
+  const status: CardTrend['status'] =
+    Math.abs(delta) <= tolerance ? 'neutral' : better ? 'good' : 'bad';
+
+  let label: string;
+  if (metric.unit === 'percent') label = `${delta > 0 ? '+' : ''}${delta.toFixed(1)} pts`;
+  else if (metric.unit === 'days') label = `${delta > 0 ? '+' : ''}${delta.toFixed(1)} d`;
+  else if (metric.unit === 'currency') label = `${delta > 0 ? '+' : '-'}$${Math.abs(Math.round(delta / 1000))}k`;
+  else label = `${delta > 0 ? '+' : ''}${Math.round(delta)}`;
+
+  return { status, label: `${label} vs target` };
+}
+
+/* Two-series line-chart colours come from the shared palette: blue + orange
+   rather than green + red, which collapses to near-identical browns under
+   deuteranopia (measured dE 19, vs 118 for this pair). Verified by
+   scripts/verify-theme.py. */
+const SERIES = SERIES_PALETTE;
 
 const ACTIVITY_TONES: Record<string, Tone> = {
   hire: 'emerald', exit: 'rose', promotion: 'indigo', leave: 'amber',
@@ -284,11 +377,11 @@ export default function App() {
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <span className="inline-flex items-center gap-1.5 rounded-lg bg-surface/80 px-2.5 py-1.5 font-medium text-body ring-1 ring-hair shadow-soft">
               <Calendar className="h-3.5 w-3.5 text-subtle" />
-              Jan 1 – Dec 31, 2024
+              {reportingPeriod}
             </span>
             <span className="inline-flex items-center gap-1.5 rounded-lg bg-surface/80 px-2.5 py-1.5 font-medium text-body ring-1 ring-hair shadow-soft">
               <Sparkles className="h-3.5 w-3.5 text-amber-500" />
-              FY 2024
+              Trailing 12 months
             </span>
           </div>
         </div>
@@ -301,81 +394,49 @@ export default function App() {
           onClearFilters={handleClearFilters}
         />
 
-        {/* KPI Cards */}
+        {/* Executive KPIs — the five questions the CHRO actually asks. Each
+            carries its target, so a number is never shown without context. */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          {executiveMetrics.map((metric, index) => {
+            const { display, prefix, suffix } = formatMetricValue(metric);
+            return (
+              <KPICard
+                key={metric.id}
+                title={metric.label}
+                value={display}
+                prefix={prefix}
+                suffix={suffix}
+                trend={metricTrend(metric)}
+                target={formatTarget(metric)}
+                hint={metric.hint}
+                icon={METRIC_ICONS[metric.id] ?? <Activity className="w-5 h-5" />}
+                tone={METRIC_TONES[metric.id] ?? 'slate'}
+                index={index}
+              />
+            );
+          })}
+        </div>
+
+        {/* Operational snapshot — the detail behind the five above. */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
-          <KPICard
-            title="Total Employees"
-            value={kpiData.totalEmployees}
-            change={5.2}
-            changeLabel="vs last year"
-            icon={<Users className="w-5 h-5" />}
-            tone="sky"
-            index={0}
-          />
-          <KPICard
-            title="Active Employees"
-            value={kpiData.activeEmployees}
-            change={3.8}
-            changeLabel="vs last month"
-            icon={<UserCheck className="w-5 h-5" />}
-            tone="emerald"
-            index={1}
-          />
-          <KPICard
-            title="New Hires"
-            value={kpiData.newHires}
-            change={12}
-            changeLabel="this quarter"
-            icon={<UserPlus className="w-5 h-5" />}
-            tone="indigo"
-            index={2}
-          />
-          <KPICard
-            title="Attrition Rate"
-            value={kpiData.attritionRate}
-            change={-1.5}
-            changeLabel="vs last year"
-            suffix="%"
-            icon={<TrendingDown className="w-5 h-5" />}
-            tone="rose"
-            index={3}
-          />
-          <KPICard
-            title="Avg. Salary"
-            value={kpiData.avgSalary}
-            prefix="$"
-            change={4.5}
-            changeLabel="increase"
-            icon={<DollarSign className="w-5 h-5" />}
-            tone="violet"
-            index={4}
-          />
-          <KPICard
-            title="Attendance"
-            value={kpiData.attendanceRate}
-            suffix="%"
-            change={0.8}
-            changeLabel="this month"
-            icon={<Calendar className="w-5 h-5" />}
-            tone="cyan"
-            index={5}
-          />
-          <KPICard
-            title="Leave Balance"
-            value={kpiData.leaveBalance}
-            change={-2}
-            changeLabel="days used"
-            icon={<Clock className="w-5 h-5" />}
-            tone="amber"
-            index={6}
-          />
-          <KPICard
-            title="Departments"
-            value={kpiData.departmentCount}
-            icon={<Building2 className="w-5 h-5" />}
-            tone="slate"
-            index={7}
-          />
+          {operationalMetrics.map((metric, index) => {
+            const { display, prefix, suffix } = formatMetricValue(metric);
+            return (
+              <KPICard
+                key={metric.id}
+                title={metric.label}
+                value={display}
+                prefix={prefix}
+                suffix={suffix}
+                trend={metricTrend(metric)}
+                target={formatTarget(metric)}
+                hint={metric.hint}
+                icon={METRIC_ICONS[metric.id] ?? <Activity className="w-5 h-5" />}
+                tone={METRIC_TONES[metric.id] ?? 'slate'}
+                index={index + executiveMetrics.length}
+              />
+            );
+          })}
         </div>
 
         {/* Charts Row 1 */}

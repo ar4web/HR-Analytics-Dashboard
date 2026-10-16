@@ -152,18 +152,71 @@ dataset. Do not claim filtering works.
   is why the reusable visual classes below are hand-authored CSS rather than `@apply`d utilities —
   it makes runtime-interpolated names like `` `tone-${tone}` `` safe, since the CSS always exists.
 
+### Theme tokens and the appearance system
+
+**Never write a raw colour or a physical direction in a component.** There are two layers, and
+components only ever see the second one:
+
+1. **`src/index.css`** defines `--c-*` variables per theme. Three blocks set them:
+   `:root, [data-theme='light']`, `[data-theme='dark']` and `[data-theme='contrast']`.
+2. **The `@theme` block** maps those to Tailwind's colour namespace, so the utilities are
+   `bg-surface`, `text-strong`, `border-hair-strong` and so on. Add a token in both places or the
+   utility will not exist.
+
+| Token | Use for |
+| --- | --- |
+| `app` | Page background (behind `.app-canvas`). |
+| `surface`, `surface-2` | Cards, popovers, and the slightly recessed second level inside them. |
+| `sunken`, `sunken-strong` | Inset wells: progress tracks, table stripes, empty states. |
+| `hair`, `hair-strong` | Hairline borders and the stronger border on interactive chrome. |
+| `strong`, `body`, `muted`, `subtle` | The four-level text scale, darkest/most prominent first. |
+| `inverse`, `inverse-fg` | Chrome that is deliberately "opposite of the page" — the rail tooltip. |
+
+- **Text scale rule:** all four levels clear WCAG AA (4.5:1) against *both* `surface` and `app`.
+  `subtle` is the lightest a tertiary label may go. Run `python3 scripts/verify-theme.py` after
+  touching any of them — it computes the real ratios and exits non-zero on a regression.
+- **Colour-vision rule:** the two-series line chart uses `SERIES` in `App.tsx` (blue/orange), not
+  the emerald brand. Emerald vs red measures dE 19 under deuteranopia, which is unreadable; the
+  current pair measures 118. `verify-theme.py` checks this too.
+- **Square corners:** every Tailwind radius step is set to `0px` in `@theme`. `rounded-full` is kept
+  deliberately for pills, avatars and status dots. Never reintroduce a numeric radius.
+- **Logical properties only:** `ps/pe/ms/me/start/end`, `border-s/e`, `rounded-s/e`,
+  `text-start/end`. Physical `left/right` breaks RTL. The sidebar drawer and rail tooltip use
+  `rtl:` variants for the transforms that cannot be expressed logically.
+- **Density** comes from `--pad-panel` / `--pad-tile` / `--pad-cell` / `--gap-section`, switched by
+  `[data-density]`. Use `.pad-panel`, `.pad-tile`, `.cell-y`, `.section-stack` rather than hardcoded
+  padding, or the density control silently does nothing to that element.
+
+### The appearance provider
+
+`src/theme/ThemeProvider.tsx` owns `{theme, density, direction}`, mirrors them onto `<html>` as
+`data-theme` / `data-theme-preference` / `data-density` / `dir` / `lang`, and persists to
+`localStorage['hr-dash:appearance']`. `src/theme/appearance.ts` holds the context, types and
+`useAppearance()` — split out so the provider file exports only a component (the
+`react-refresh/only-export-components` lint rule requires it).
+
+- `index.html` carries a **pre-paint script** for the same key so the first paint is already
+  correct. It duplicates the allowlists on purpose (it cannot import them); if you change the
+  storage shape, change both. Its `JSON.parse` is guarded in its own `try` so a corrupted value
+  cannot prevent `dir`/`lang` from being applied.
+- `ThemeMenu` in the header is the only control surface. It is a real popover with
+  `aria-expanded`, so treat the header button as interactive when adding header tests.
+
 ### The visual system (all in `src/index.css`)
 
 | Piece | What it does |
 | --- | --- |
-| `.app-canvas` | Page background: three radial colour glows over a vertical base gradient, plus a `::before` grid for depth. `isolation: isolate` is load-bearing — without it the `z-index: -1` grid paints behind the element's own background and disappears. |
-| `.surface` | The single card recipe (radius, border, translucent white, elevation + inner highlight). Used by ~20 panels. Pair with `.surface-lift` for hover elevation. |
+| `.app-canvas` | Page background: three radial colour glows over a vertical base gradient, plus a `::before` grid for depth. `isolation: isolate` is load-bearing — without it the `z-index: -1` grid paints behind the element's own background and disappears. All glows are disabled in the contrast theme. |
+| `.surface` | The single card recipe (radius, border, translucent surface, elevation + inner highlight). Used by ~20 panels. Pair with `.surface-lift` for hover elevation. |
+| `.header-elevation` | The sticky header's shadow. Theme-aware: a white highlight on light, a dim rim on dark, none in contrast. Never inline a fixed white shadow again. |
 | `.hairline` | Tone-coloured accent line across a card's top edge via `::after`. |
 | `.tile` | Gradient icon tile, coloured from the `--tone-*` variables of the nearest `.tone-*` ancestor. |
+| `.chip` + `.chip-positive` / `.chip-negative` / `.chip-neutral` | Status pills. The contrast theme prefixes them with ▲/▼ so the meaning never rests on colour alone. |
+| `.row-hover` | Tone-aware table row hover, replacing the old hardcoded `hover:bg-emerald-50/40` that flashed near-white in dark mode. |
 | `.glass-bar` / `.glass-rail` | Backdrop-blur chrome for the sticky header and the sidebar only. |
 | `.chart-plate` | Frosted inset behind chart SVGs. |
 | `.tnum` | Tabular figures for KPI values, tables and axes so digits don't jitter. |
-| `.tone-*` | Eight tones (emerald, sky, indigo, violet, rose, amber, cyan, slate). Each sets `--tone-1/2/soft/text/glow`; `.tile`, `.hairline`, `.tone-text` and `.tone-soft` read them. |
+| `.tone-*` | Eight tones (emerald, sky, indigo, violet, rose, amber, cyan, slate). Each sets `--tone-1/2/soft/text/glow`; `.tile`, `.hairline`, `.row-hover`, `.tone-text` and `.tone-soft` read them. |
 
 - **Adding a tone-dependent element:** put a `.tone-*` class on any ancestor and use `.tile` /
   `.tone-text` / `.tone-soft` on descendants — the variables inherit. Adding a new tone means one
@@ -182,6 +235,15 @@ dataset. Do not claim filtering works.
   icon leaves the value roughly 55px of width.
 - `prefers-reduced-motion` disables animations/transitions, and `@media print` flattens surfaces
   and hides `.no-print`.
+
+### Verification scripts
+
+Both are run from the repo root and exit non-zero on failure. Run them after any styling change.
+
+| Script | Checks |
+| --- | --- |
+| `scripts/verify-theme.py` | WCAG contrast for all four text levels, tone chips and inverse chrome in each of the three themes; deuteranopia dE for the chart series pairs; density values per preset. |
+| `scripts/verify-classes.py` | Parses every `className` in `src/**/*.tsx` (expanding the runtime tone families), then asserts each token exists in `dist/assets/*.css`. Needs a build first. |
 
 ## Tooling notes
 
