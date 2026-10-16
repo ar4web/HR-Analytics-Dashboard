@@ -160,11 +160,20 @@ keep that ordering if you add floating UI.
   data arrays in components or in `App.tsx`, and do not add a hand-typed constant — the whole point
   of the data layer is that a figure cannot disagree with the population behind it. New panels
   should import from `metrics.ts` rather than the `hrData.ts` adapter.
-- **Adding a module:** four edits — a `NavItem` in `components/Sidebar.tsx`, a key in the
-  `activeModule` switch in `App.tsx`, a panel component, and a data facade if the figures are
-  regulatory (`data/compliance.ts` is the pattern). The sidebar is controlled: `App` owns
-  `activeModule` so the main region always agrees with the highlighted nav item. Nav badges must
-  come from `badges` (live counts), never a literal in the nav array.
+- **Adding a module:** four edits — a `NavItem` in `components/Sidebar.tsx`, a branch in the module
+  switch in `App.tsx`, a `*Module.tsx` component that composes `components/ui.tsx`, and a
+  `src/data/<module>.ts` facade when the figures need deriving (`data/compliance.ts` and
+  `data/payroll.ts` are the patterns). Modules are **routes**: the active key lives in the URL hash
+  (`state/useHashRoute.ts`) and the sidebar is controlled from it, so a module is linkable and the
+  back button works. Nav badges come from the `badges` prop (live counts), never a literal.
+- **An unbuilt module must say so.** `components/UpcomingModule.tsx` renders the phase it arrives in;
+  never let a nav key fall through to the dashboard, or the breadcrumb contradicts the content.
+- **Gating is `role.can.*`, and it is the real thing.** Salary cells go through `<Sensitive>`, whole
+  modules return a restricted state, and sorting by a masked column is hidden — sorting leaks the
+  ranking even when the values are hidden. Adding a module that shows pay or identifiers means
+  deciding what each of the four roles in `state/role.ts` may see.
+- **Module data goes in a facade, not the component.** Filtering, sorting and pagination live in
+  `data/*.ts` so the same predicates hold for the table, the mobile card list and any future export.
 - **Saudi content:** the reference layer is `src/data/saudi.ts` — put rates, articles, thresholds and
   calendars there, not in components. Anything regulatory states its basis in the UI (article number
   or percentage), because these change by ministerial decision.

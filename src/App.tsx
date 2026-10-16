@@ -15,8 +15,13 @@ import { StackedBarChart } from './components/StackedBarChart';
 import { FilterBar } from './components/FilterBar';
 import { Sidebar } from './components/Sidebar';
 import { ThemeMenu } from './components/ThemeMenu';
-import { CompliancePanel } from './components/CompliancePanel';
+import { ComplianceModule } from './components/ComplianceModule';
+import { EmployeesModule } from './components/EmployeesModule';
+import { PayrollModule } from './components/PayrollModule';
+import { UpcomingModule } from './components/UpcomingModule';
 import { CardHeader, Legend, MiniStat } from './components/ui';
+import { RoleSwitcher } from './state/RoleSwitcher';
+import { useHashRoute } from './state/useHashRoute';
 import {
   kpiData, departmentBreakdown, hiringTrends, attritionData,
   demographicsData, attendanceData, performanceData, locationData,
@@ -156,8 +161,10 @@ const ACTIVITY_TONES: Record<string, Tone> = {
 const LEAVE_TONES: Tone[] = ['emerald', 'rose', 'indigo', 'violet'];
 
 export default function App() {
-  /** Which module the main region renders. */
-  const [activeModule, setActiveModule] = useState('dashboard');
+  /* The active module lives in the URL hash so a module can be linked to and
+     the back button works. Nav selection is therefore derived state, not state
+     owned by the sidebar. */
+  const [activeModule, setActiveModule] = useHashRoute('dashboard');
   const [activeFilters, setActiveFilters] = useState<Record<string, string>>({
     month: 'all',
     department: 'all',
@@ -358,6 +365,7 @@ export default function App() {
                 <Bell className="w-4.5 h-4.5" />
                 <span className="absolute top-1.5 end-1.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-surface" />
               </button>
+              <RoleSwitcher />
               <ThemeMenu />
 
               <span className="hidden h-8 w-px bg-sunken-strong sm:block" />
@@ -386,7 +394,13 @@ export default function App() {
 
       <main className="section-stack max-w-[1600px] mx-auto px-6 py-6">
         {activeModule === 'compliance' || activeModule === 'documents' ? (
-          <CompliancePanel focus={activeModule === 'documents' ? 'documents' : 'all'} />
+          <ComplianceModule focus={activeModule === 'documents' ? 'documents' : 'all'} />
+        ) : activeModule === 'employees' ? (
+          <EmployeesModule />
+        ) : activeModule === 'payroll' ? (
+          <PayrollModule />
+        ) : activeModule !== 'dashboard' ? (
+          <UpcomingModule moduleKey={activeModule} />
         ) : (
         <>
         {/* Page intro: breadcrumb, live status, reporting period */}
@@ -394,7 +408,9 @@ export default function App() {
           <div className="flex items-center gap-2 text-xs">
             <span className="text-subtle">Workforce</span>
             <ChevronRight className="h-3 w-3 text-subtle" />
-            <span className="font-semibold text-strong">Overview</span>
+            <span className="font-semibold text-strong capitalize">
+              {activeModule.replace('-', ' ')}
+            </span>
             <span className="ms-1 inline-flex items-center gap-1.5 rounded-full bg-surface/80 px-2 py-1 font-medium text-emerald-700 ring-1 ring-emerald-100 shadow-soft">
               <span className="relative flex h-1.5 w-1.5">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />

@@ -445,7 +445,11 @@ function buildEmployee(
   // Pay: a monthly gross that recentreSalaries pins to the department rate.
   const seniorityUplift = 1 + Math.min(0.35, tenure * 0.035);
   const performanceUplift = 1 + (performance - 72) / 400;
-  const monthlyGross = randNormal(random, department.targetSalary, department.targetSalary * 0.16) *
+  // σ is 9% of the target, not the 16% this started at. Graded pay inside a
+  // single role clusters; at 16% the fifth percentile sat 22% below midpoint,
+  // which is not how a banded structure behaves and made every pay-outlier
+  // report flag a third of the company.
+  const monthlyGross = randNormal(random, department.targetSalary, department.targetSalary * 0.09) *
     seniorityUplift * performanceUplift;
 
   const ageBand = pickWeighted(random, AGE_BANDS);
@@ -553,7 +557,9 @@ function structurePay(population: Employee[], random: Random): void {
 
       // Standard Saudi structure: basic is the reference for every other
       // allowance, so each is derived from it rather than invented separately.
-      const basic = Math.round(gross / 1.35); // basic + 25% housing + 10% transport
+      // Percentages are of *basic*, not of gross — the standard Saudi structure:
+      // gross = basic + 25% housing + 10% transport, so gross is 1.35 × basic.
+      const basic = Math.round(gross / 1.35);
       const housing = Math.round(basic * 0.25);
       const transport = gross - basic - housing;
 

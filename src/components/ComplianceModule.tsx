@@ -39,7 +39,7 @@ const BAND_TONE: Record<NitaqatBand, 'emerald' | 'sky' | 'cyan' | 'indigo' | 'am
   Red: 'rose',
 };
 
-export function CompliancePanel({ focus = 'all' }: { focus?: 'all' | 'documents' }) {
+export function ComplianceModule({ focus = 'all' }: { focus?: 'all' | 'documents' }) {
   const bandTone = BAND_TONE[saudization.band];
   const all = focus === 'all';
 
