@@ -74,24 +74,52 @@ src/
 
 ### Data flow
 
-`hrData.ts` exports plain typed arrays/objects → `App.tsx` imports them and maps each one into the
-`{ label, value, color }` / `{ label, values[] }` shape its chart component expects → the chart
-component renders it. Chart-data transformation lives **inline in `App.tsx`** (see
-`departmentChartData`, `hiringTrendData`, `attritionChartData`, etc.), not in the data module and
-not in the components.
+Everything on the dashboard is **derived from a generated population**. There are no hand-typed
+KPI constants; the previous ones contradicted each other (a $78,500 average salary next to a
+department table implying $80,138, 89 new hires next to 195, a 2,456 leave balance next to 14,122)
+and are gone.
 
-Components are presentational only: they hold no data and fetch nothing. Props are declared as
-local `interface XxxProps` blocks above each component, and components are exported as **named**
-exports (`export function BarChart(...)`), not defaults — `App.tsx` is the only default export.
+| File | Role |
+| --- | --- |
+| `src/data/random.ts` | Seeded PRNG (mulberry32) plus weighted / normal / skewed draws. Deterministic on purpose — the numbers must not change between reloads or between builds. |
+| `src/data/employees.ts` | The 1,247-record population, its configuration (headcounts, salaries, attrition rates, compa-ratios, time-to-fill) and `AS_OF_DATE` / `PERIOD_START`. |
+| `src/data/metrics.ts` | Every KPI and chart series, computed. Each metric carries value + target + direction + cadence. |
+| `src/data/palette.ts` | Series colours. Wong/IBM accessible palettes, **not** the brand emerald. |
+| `src/data/hrData.ts` | Adapter over the above, keeping the old export names so panels migrate one at a time. New code imports from `metrics.ts`. |
+
+- **To change a number, change the population or a rate constant — never a literal in a component.**
+  Headcounts are seeded as slots and paired off, so department and location totals are exact; if you
+  edit one list without the other, `generateEmployees` throws rather than silently disagreeing.
+- **Fields are generated in dependency order** (tenure → rating → attendance/engagement → pay →
+  leave). Independent draws produce a population that does not hang together — a hundred
+  five-year veterans rated "Below" with 60% attendance is not a company.
+- **`AS_OF_DATE` is the previous month end, not today.** A mid-month cutoff makes the final bar of
+  every monthly chart a partial month, so it reads as a collapse in hiring rather than an
+  unfinished period. It also keeps the figures stable for the whole of a month.
+- **Departures are confined to the trailing twelve months**, which is what makes the population
+  mean "current staff plus everyone who left during the period" and makes attrition a real annual
+  rate. Spreading exits over employees' whole history produced 0.5%.
+- **Parental leave carries no standing balance** — it is granted per event. Accruing an entitlement
+  for all 1,247 staff invented ~23,000 phantom days; the leave KPI is unused *annual* leave only.
+- Turnover is separations ÷ average headcount, computed identically at org and department level so
+  the rows reconcile with the headline.
+
+### Filters are currently decorative ⚠️
+
+`FilterBar` still does not filter anything. `activeFilters` in `App.tsx` is a display-only array;
+selecting a month/department/location/gender/status changes the chip but not the data. The data
+layer can support it now — `metrics.ts` derives everything from the population, so filtering means
+passing a predicate down — but PLAN.md §3 puts the state in `useSearchParams` so a filtered view is
+shareable by URL. Until that lands, do not describe the dashboard as filterable.
 
 ### Page layout (order in `App.tsx`)
 
 `Sidebar` is `fixed` and the app root pads for it, so `App.tsx` renders: Sidebar (plus a mobile
-scrim) → Header (hamburger + brand on mobile, search / bell / settings / export / profile) →
-`FilterBar` → 8 KPI cards → Charts Row 1 (Hiring Trends line, Department Distribution bar, Gender
-donut) → Charts Row 2 (Attrition stacked bar, Attendance line) → Charts Row 3 (Performance bar,
-Location bar, Age bar) → Bottom (Department Overview table, Recent Activity feed) → Leave
-Management cards → footer.
+scrim) → Header (hamburger + brand on mobile, search / bell / appearance menu / export / profile) →
+`FilterBar` → 5 executive KPI cards → 8 operational KPI cards → Charts Row 1 (Hiring Trends line,
+Department Distribution bar, Gender donut) → Charts Row 2 (Attrition stacked bar, Attendance line) →
+Charts Row 3 (Performance bar, Location bar, Age bar) → Bottom (Department Overview table, Recent
+Activity feed) → Leave Management cards → footer.
 
 ### Sidebar states
 
@@ -112,18 +140,12 @@ selection is local `useState` in `Sidebar`; the rail dimensions are *not* persis
 The mobile scrim is `z-[60]` and the sidebar `z-[70]`, both above the sticky header's `z-40` —
 keep that ordering if you add floating UI.
 
-### Filters are currently decorative ⚠️
-
-`FilterBar` + `activeFilters` state in `App.tsx` render and update correctly, but **nothing reads
-`activeFilters`**. Selecting a month/department/location/gender/status changes only the button
-labels; KPIs, charts, and tables are unaffected. `kpiData` in `hrData.ts` is a static object, not
-a derivation, so making filters real means deriving the KPI/chart values from a per-employee
-dataset. Do not claim filtering works.
-
 ## Conventions
 
-- **Adding a dataset:** export a typed `const` from `src/data/hrData.ts` alongside the existing
-  ones; do not inline data arrays in components or in `App.tsx`.
+- **Adding a metric or series:** derive it in `src/data/metrics.ts` from `employees`. Do not inline
+  data arrays in components or in `App.tsx`, and do not add a hand-typed constant — the whole point
+  of the data layer is that a figure cannot disagree with the population behind it. New panels
+  should import from `metrics.ts` rather than the `hrData.ts` adapter.
 - **Adding a chart:** either reuse an existing component in `src/components/` with a new
   `{ label, value, color }[]` mapping in `App.tsx`, or add a new presentational component there
   with a local `interface XxxProps`, a named export, and pure inline SVG/divs. Recharts is
@@ -134,10 +156,11 @@ dataset. Do not claim filtering works.
   cards. Do not add CSS keyframe animations for new interactive elements; the keyframes in
   `index.css` are legacy.
 - **Section comments:** top-level JSX blocks in `App.tsx` are labelled with `{/* Name */}`
-  comments; keep that so the ~640-line file stays navigable.
-- `index.html` is the only `lang="en"` document and there is no i18n layer; copy is hard-coded
-  American English with USD amounts, and `hrData.ts` locations are US cities. Preserve that
-  unless the task asks otherwise.
+  comments; keep that so the file stays navigable.
+- Copy is hard-coded American English with USD amounts, and the population's locations are US
+  cities. The layout is already direction-agnostic (logical properties, `dir` on `<html>`, RTL
+  variants where transforms are involved), so switching to Arabic is a copy-and-data task rather
+  than a re-layout — but the default remains English until that is asked for.
 - Keep `strict` TypeScript happy without reaching for `any`; `tsc -b` gates the build.
 
 ## Styling
