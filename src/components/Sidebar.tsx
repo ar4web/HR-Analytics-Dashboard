@@ -96,7 +96,7 @@ export function Sidebar({ collapsed, onToggleCollapsed, mobileOpen, onCloseMobil
           collapsed ? 'lg:pl-7' : ''
         } ${
           isActive
-            ? 'bg-emerald-50 text-emerald-700'
+            ? 'bg-gradient-to-r from-emerald-50 to-emerald-50/40 text-emerald-700 shadow-[inset_0_1px_0_0_rgb(255_255_255/0.6)] ring-1 ring-emerald-100'
             : 'text-gray-500 hover:bg-gray-100/70 hover:text-gray-900'
         }`}
       >
@@ -129,13 +129,14 @@ export function Sidebar({ collapsed, onToggleCollapsed, mobileOpen, onCloseMobil
   return (
     <aside
       aria-label="Main navigation"
-      className={`fixed left-0 top-0 z-[70] flex h-dvh w-[288px] flex-col border-r border-gray-100 bg-white shadow-2xl transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] lg:translate-x-0 lg:shadow-none ${
+      className={`glass-rail fixed left-0 top-0 z-[70] flex h-dvh w-[288px] flex-col border-r border-gray-200/70 shadow-2xl transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] lg:translate-x-0 lg:shadow-rail ${
         collapsed ? 'lg:w-24' : 'lg:w-[264px]'
       } ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}
     >
       {/* Brand */}
-      <div className="flex h-16 shrink-0 items-center gap-3 border-b border-gray-100 pl-7 pr-3">
-        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 shadow-lg shadow-emerald-500/20">
+      <div className="relative flex h-16 shrink-0 items-center gap-3 overflow-hidden border-b border-gray-100 pl-7 pr-3">
+        <span className="pointer-events-none absolute inset-0 bg-gradient-to-r from-emerald-50/80 via-transparent to-transparent" aria-hidden />
+        <div className="relative grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 shadow-lg shadow-emerald-500/25 ring-1 ring-emerald-600/20">
           <BarChart3 className="h-5 w-5 text-white" />
         </div>
         <div className={blockClass}>

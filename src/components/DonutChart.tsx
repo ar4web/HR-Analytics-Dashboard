@@ -1,3 +1,4 @@
+import { useId, useState } from 'react';
 import { motion } from 'framer-motion';
 
 interface DonutChartProps {
@@ -10,6 +11,11 @@ interface DonutChartProps {
   centerValue?: string | number;
 }
 
+/**
+ * Donut built from a single circle per slice using dash offsets, which avoids
+ * arc/polar maths entirely. Slices are separated by a small gap; hovering one
+ * thickens it and swaps the centre label for that slice's figures.
+ */
 export function DonutChart({
   data,
   title,
@@ -19,77 +25,114 @@ export function DonutChart({
   centerText,
   centerValue,
 }: DonutChartProps) {
-  const total = data.reduce((sum, item) => sum + item.value, 0);
-  let currentAngle = -90;
+  const uid = useId().replace(/:/g, '');
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
 
-  const segments = data.map((item) => {
-    const percentage = (item.value / total) * 100;
-    const angle = (percentage / 100) * 360;
-    const startAngle = currentAngle;
-    currentAngle += angle;
-    return {
-      ...item,
-      percentage,
-      startAngle,
-      endAngle: currentAngle,
-    };
-  });
+  const total = data.reduce((sum, item) => sum + item.value, 0) || 1;
+  const radius = (size - thickness) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const gap = Math.max(circumference * 0.012, 1);
 
-  const createArc = (startAngle: number, endAngle: number, radius: number) => {
-    const start = polarToCartesian(radius, radius, radius, endAngle);
-    const end = polarToCartesian(radius, radius, radius, startAngle);
-    const largeArcFlag = endAngle - startAngle <= 180 ? 0 : 1;
-    return [
-      'M', start.x, start.y,
-      'A', radius, radius, 0, largeArcFlag, 0, end.x, end.y,
-    ].join(' ');
-  };
+  // Pure fold — no variable reassignment during render.
+  // The gap is taken out of the END of each slice, so slice start positions stay
+  // true to their fractions. Slices too small to afford the full gap keep a 2px
+  // minimum, otherwise a 1% slice rounds away to nothing and looks like a bug.
+  const segments = data.reduce<
+    { name: string; value: number; color: string; fraction: number; length: number; offset: number }[]
+  >((acc, item) => {
+    const fraction = item.value / total;
+    const previous = acc[acc.length - 1];
+    const offset = previous ? previous.offset + previous.fraction * circumference : 0;
+    const arc = fraction * circumference;
+    const sliceGap = Math.min(gap, Math.max(arc - 2, 0));
+    return [...acc, { ...item, fraction, offset, length: Math.max(arc - sliceGap, 2) }];
+  }, []);
 
-  const polarToCartesian = (centerX: number, centerY: number, radius: number, angleInDegrees: number) => {
-    const angleInRadians = ((angleInDegrees - 90) * Math.PI) / 180;
-    return {
-      x: centerX + radius * Math.cos(angleInRadians),
-      y: centerY + radius * Math.sin(angleInRadians),
-    };
-  };
-
-  const radius = size / 2;
-  const innerRadius = radius - thickness;
+  const active = activeIndex !== null ? segments[activeIndex] : null;
 
   return (
     <div className="flex flex-col items-center">
-      {title && <h4 className="text-sm font-semibold text-gray-700 mb-4">{title}</h4>}
+      {title && <h4 className="mb-4 text-sm font-semibold text-gray-700">{title}</h4>}
+
       <div className="relative" style={{ width: size, height: size }}>
-        <svg width={size} height={size} className="transform -rotate-90">
-          {segments.map((segment, index) => (
-            <motion.path
-              key={segment.name}
-              d={createArc(segment.startAngle, segment.endAngle, radius - thickness / 2)}
-              fill="none"
-              stroke={segment.color}
-              strokeWidth={thickness}
-              strokeLinecap="round"
-              initial={{ pathLength: 0, opacity: 0 }}
-              animate={{ pathLength: 1, opacity: 1 }}
-              transition={{ duration: 1, delay: index * 0.1 }}
-            />
-          ))}
+        <svg width={size} height={size} role="img" aria-label={`${centerText ?? 'Total'}: ${centerValue ?? total}`}>
+          <defs>
+            <filter id={`${uid}-shadow`} x="-30%" y="-30%" width="160%" height="160%">
+              <feDropShadow dx="0" dy="3" stdDeviation="4" floodColor="#0f172a" floodOpacity="0.16" />
+            </filter>
+          </defs>
+
+          {/* Track: gives the ring presence even where slices are small */}
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            fill="none"
+            stroke="#f1f5f9"
+            strokeWidth={thickness}
+          />
+
+          <g transform={`rotate(-90 ${size / 2} ${size / 2})`} filter={`url(#${uid}-shadow)`}>
+            {segments.map((segment, index) => (
+              <motion.circle
+                key={segment.name}
+                cx={size / 2}
+                cy={size / 2}
+                r={radius}
+                fill="none"
+                stroke={segment.color}
+                strokeWidth={activeIndex === index ? thickness + 5 : thickness}
+                strokeDasharray={`${segment.length} ${circumference - segment.length}`}
+                strokeDashoffset={-segment.offset}
+                strokeLinecap="butt"
+                className="cursor-pointer transition-[stroke-width] duration-200"
+                onMouseEnter={() => setActiveIndex(index)}
+                onMouseLeave={() => setActiveIndex(null)}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: activeIndex === null || activeIndex === index ? 1 : 0.35 }}
+                transition={{ duration: 0.35, delay: index * 0.12 }}
+              />
+            ))}
+          </g>
         </svg>
-        {(centerText || centerValue) && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center">
-            {centerValue && <span className="text-2xl font-bold text-gray-900">{centerValue}</span>}
-            {centerText && <span className="text-xs text-gray-500">{centerText}</span>}
-          </div>
-        )}
+
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+          <span className="tnum text-2xl font-bold leading-none text-gray-900">
+            {active ? active.value.toLocaleString() : centerValue}
+          </span>
+          <span className="mt-1 max-w-[75%] truncate text-[11px] font-medium text-gray-500">
+            {active ? active.name : centerText}
+          </span>
+          {active && (
+            <span className="tnum mt-0.5 text-[10px] font-semibold text-emerald-600">
+              {(active.fraction * 100).toFixed(1)}%
+            </span>
+          )}
+        </div>
       </div>
+
       {showLegend && (
-        <div className="flex flex-wrap justify-center gap-4 mt-4">
-          {data.map((item) => (
-            <div key={item.name} className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
-              <span className="text-xs text-gray-600">{item.name}</span>
-              <span className="text-xs font-medium text-gray-900">{item.value}</span>
-            </div>
+        <div className="mt-5 w-full space-y-1.5">
+          {segments.map((item, index) => (
+            <button
+              key={item.name}
+              type="button"
+              onMouseEnter={() => setActiveIndex(index)}
+              onMouseLeave={() => setActiveIndex(null)}
+              className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors ${
+                activeIndex === index ? 'bg-gray-50' : ''
+              }`}
+            >
+              <span
+                className="h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-white"
+                style={{ backgroundColor: item.color, boxShadow: `0 1px 4px -1px ${item.color}aa` }}
+              />
+              <span className="flex-1 truncate text-xs text-gray-600">{item.name}</span>
+              <span className="tnum text-xs font-semibold text-gray-900">{item.value.toLocaleString()}</span>
+              <span className="tnum w-11 text-right text-[11px] font-medium text-gray-400">
+                {(item.fraction * 100).toFixed(1)}%
+              </span>
+            </button>
           ))}
         </div>
       )}
